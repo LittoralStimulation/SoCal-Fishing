@@ -152,16 +152,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--deep);color:var(--white);
 .fc-wind{font-size:10px;color:var(--mist);margin-top:1px;}
 
 /* MAP CONTROLS */
-.map-ctrl{background:rgba(10,22,40,0.95);border-bottom:1px solid var(--bdr);padding:8px 12px;flex-shrink:0;}
+.map-ctrl{background:rgba(10,22,40,0.95);border-bottom:1px solid var(--bdr);padding:8px 12px;flex-shrink:0;display:block;width:100%;}
 .mode-toggle{display:flex;border-radius:8px;overflow:hidden;border:1px solid var(--bdr);margin-bottom:8px;}
 .mode-btn{flex:1;padding:7px;font-size:11px;font-family:'DM Mono',monospace;background:rgba(10,22,40,0.6);border:none;color:var(--mist);cursor:pointer;transition:all 0.15s;-webkit-tap-highlight-color:transparent;}
 .mode-btn.active{background:rgba(37,168,94,0.2);color:var(--green);}
-.ctrl-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+.ctrl-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap;width:100%;}
 .map-sel{background:rgba(10,22,40,0.9);border:1px solid var(--bdr);border-radius:7px;color:var(--white);font-family:'DM Mono',monospace;font-size:10px;padding:6px 24px 6px 8px;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%238fa8c0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;}
-.time-slider-wrap{flex:1;display:flex;flex-direction:column;gap:2px;}
-.time-slider{width:100%;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;background:var(--bdr);outline:none;}
-.time-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--green);cursor:pointer;}
-.time-slider-lbl{font-size:9px;color:var(--mist);font-family:'DM Mono',monospace;text-align:center;}
+.time-slider-wrap{flex:1;display:flex;flex-direction:column;gap:4px;min-width:0;}
+.time-slider{width:100%;-webkit-appearance:none;appearance:none;height:6px;border-radius:3px;background:var(--bdr);outline:none;margin:4px 0;}
+.time-slider::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--green);cursor:pointer;border:2px solid rgba(255,255,255,0.3);}
+.time-slider-lbl{font-size:10px;color:var(--mist);font-family:'DM Mono',monospace;text-align:center;min-height:14px;}
 
 /* TRIP PLANNER CONTROLS */
 .tp-ctrl{background:rgba(10,22,40,0.95);padding:8px 12px;border-bottom:1px solid var(--bdr);}
@@ -175,7 +175,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--deep);color:var(--white);
 .tp-summary{background:rgba(10,22,40,0.6);border:1px solid var(--bdr);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--mist);line-height:1.55;display:none;}
 
 /* MAP LEGEND */
-.map-legend{display:flex;gap:10px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--bdr);flex-wrap:wrap;}
+.map-legend{display:flex;gap:6px;align-items:center;padding:6px 12px 4px;border-bottom:1px solid var(--bdr);flex-wrap:wrap;width:100%;box-sizing:border-box;}
 .leg-i{display:flex;align-items:center;gap:3px;font-size:9px;color:var(--mist);font-family:'DM Mono',monospace;}
 .leg-d{width:9px;height:9px;border-radius:50%;}
 
@@ -257,16 +257,11 @@ select{background:rgba(10,22,40,0.8);border:1px solid var(--bdr);border-radius:7
     <div class="cond-strip" id="condStrip">
       <div class="cp"><div class="cp-lbl">Swell</div><div class="cp-val">–</div><div class="cp-sub">–</div></div>
       <div class="cp"><div class="cp-lbl">Wind</div><div class="cp-val">–</div><div class="cp-sub">–</div></div>
-      <div class="cp"><div class="cp-lbl">SST</div><div class="cp-val">–</div><div class="cp-sub">–</div></div>
       <div class="cp"><div class="cp-lbl">Tide</div><div class="cp-val">–</div><div class="cp-sub">–</div></div>
       <div class="cp"><div class="cp-lbl">Moon</div><div class="cp-val" style="font-size:18px">🌑</div><div class="cp-sub" style="font-size:8px">–</div></div>
     </div>
 
-    <!-- Summary -->
-    <div class="sum-card">
-      <div class="sum-lbl">📍 Daily Outlook</div>
-      <div class="sum-txt" id="sumTxt">Refresh conditions to see today's outlook.</div>
-    </div>
+    <!-- Narrative summary removed -->
 
     <!-- Dest list -->
     <div class="sec-hdr"><span class="sec-title">DESTINATIONS</span><span class="sec-sub">TAP TO EXPAND</span></div>
@@ -293,7 +288,7 @@ select{background:rgba(10,22,40,0.8);border:1px solid var(--bdr);border-radius:7
       </div>
 
       <!-- CONDITIONS controls -->
-      <div id="condCtrl">
+      <div id="condCtrl" style="display:block;width:100%">
         <div class="ctrl-row">
           <div class="time-slider-wrap">
             <input type="range" class="time-slider" id="timeSlider" min="0" max="39" value="0" oninput="onSliderChange(this.value)">
@@ -303,7 +298,7 @@ select{background:rgba(10,22,40,0.8);border:1px solid var(--bdr);border-radius:7
       </div>
 
       <!-- TRIP PLANNER controls -->
-      <div id="tripCtrl" style="display:none">
+      <div id="tripCtrl" style="display:none;width:100%">
         <div class="tp-row">
           <div class="tp-field">
             <div class="tp-lbl">Destination</div>
@@ -348,8 +343,8 @@ select{background:rgba(10,22,40,0.8);border:1px solid var(--bdr);border-radius:7
       <div class="leg-i" id="legAnch" style="display:none"><div class="leg-d" style="background:#9b59b6"></div>Anchorage</div>
     <div class="leg-i"><div class="leg-d" style="background:#e67e22;font-size:8px;color:white;display:flex;align-items:center;justify-content:center;font-weight:900">!</div>MPA</div>
     <div class="leg-i"><div class="leg-d" style="background:#666;font-size:8px;color:white;display:flex;align-items:center;justify-content:center;font-weight:900">✕</div>Naval</div>
-    <button onclick="toggleMPALayer()" id="mpaToggleBtn" style="background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.4);border-radius:5px;color:#e88;font-size:9px;font-family:monospace;padding:3px 7px;cursor:pointer">MPA Bounds: OFF</button>
-    <button onclick="toggleShadowLayer()" id="shadowToggleBtn" style="background:rgba(37,168,94,0.15);border:1px solid rgba(37,168,94,0.3);border-radius:5px;color:var(--green);font-size:9px;font-family:monospace;padding:3px 7px;cursor:pointer">Lee Shadows: ON</button>
+    <button onclick="toggleMPALayer()" id="mpaToggleBtn" style="background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.4);border-radius:5px;color:#e88;font-size:10px;font-family:monospace;padding:5px 9px;cursor:pointer;-webkit-tap-highlight-color:transparent;min-height:28px">MPA: OFF</button>
+    <button onclick="toggleShadowLayer()" id="shadowToggleBtn" style="background:rgba(37,168,94,0.15);border:1px solid rgba(37,168,94,0.3);border-radius:5px;color:var(--green);font-size:10px;font-family:monospace;padding:5px 9px;cursor:pointer;-webkit-tap-highlight-color:transparent;min-height:28px">Shadows: ON</button>
     </div>
 
     <div id="mapWrap"><div id="fishMap"></div></div>
@@ -1416,8 +1411,7 @@ function renderDashboard(){
   // Conditions strip uses forecast current hour — same data source as all scoring
   const now=new Date();
   const cc=getForecastConditions(now,now.getHours())||S.currentConditions||null;
-  renderCondStrip(cc, null);
-  renderSummary(cc, null);
+  renderCondStrip(cc, null); // summary disabled
   // Destinations
   renderDestList();
 }
