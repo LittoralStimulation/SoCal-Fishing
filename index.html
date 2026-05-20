@@ -1,0 +1,2566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SoCal Fish">
+<meta name="theme-color" content="#0a1628">
+<title>SoCal Fish</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --deep:#0a1628;--mid:#0d2040;--surf:#102848;
+  --green:#25a85e;--gdim:rgba(37,168,94,0.2);
+  --yellow:#e8a020;--ydim:rgba(232,160,32,0.18);
+  --red:#c0392b;--rdim:rgba(192,57,43,0.18);
+  --nogo:#7a1f1f;--ndim:rgba(122,31,31,0.35);
+  --blue:#3498db;--bdim:rgba(52,152,219,0.15);
+  --white:#e8f4f8;--mist:#8fa8c0;
+  --card:rgba(16,40,72,0.88);--bdr:rgba(52,152,219,0.18);
+  --safe:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'DM Sans',sans-serif;background:var(--deep);color:var(--white);overflow:hidden;}
+.app{display:flex;flex-direction:column;height:100vh;max-width:480px;margin:0 auto;position:relative;}
+
+/* HEADER */
+.hdr{background:linear-gradient(180deg,rgba(10,22,40,0.99),rgba(10,22,40,0.9));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:48px 16px 12px;border-bottom:1px solid var(--bdr);flex-shrink:0;z-index:100;}
+.hdr-row{display:flex;justify-content:space-between;align-items:flex-start;}
+.app-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;line-height:1;}
+.app-sub{font-size:10px;color:var(--mist);letter-spacing:1.5px;text-transform:uppercase;margin-top:1px;font-family:'DM Mono',monospace;}
+.last-upd{font-size:10px;color:var(--mist);font-family:'DM Mono',monospace;margin-top:4px;}
+.hdr-btns{display:flex;gap:6px;align-items:center;}
+.refresh-btn{background:var(--bdim);border:1px solid rgba(52,152,219,0.3);color:var(--blue);border-radius:7px;padding:6px 11px;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;display:flex;align-items:center;gap:4px;}
+.refresh-btn.spinning svg{animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* CONTENT AREA */
+.content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:calc(62px + var(--safe));}
+.content::-webkit-scrollbar{display:none;}
+
+/* NAV */
+.nav{position:absolute;bottom:0;left:0;right:0;background:rgba(10,22,40,0.97);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--bdr);display:flex;padding-bottom:var(--safe);z-index:200;flex-shrink:0;}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;padding:8px 0 6px;background:none;border:none;cursor:pointer;color:var(--mist);font-family:'DM Sans',sans-serif;font-size:9px;gap:2px;-webkit-tap-highlight-color:transparent;transition:color 0.15s;}
+.nav-btn.active{color:var(--green);}
+.nav-btn svg{width:19px;height:19px;}
+
+/* PAGES */
+.page{display:none;} .page.active{display:block;}
+
+/* MAP PAGE — full bleed */
+#page-map.active{display:flex;flex-direction:column;height:100%;}
+#mapWrap{flex:1;position:relative;overflow:hidden;}
+#fishMap{width:100%;height:100%;}
+
+/* GENERIC */
+.sec-hdr{display:flex;justify-content:space-between;align-items:center;padding:16px 16px 8px;}
+.sec-title{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;}
+.sec-sub{font-size:10px;color:var(--mist);font-family:'DM Mono',monospace;}
+.card{background:var(--card);border:1px solid var(--bdr);border-radius:13px;padding:14px;margin:0 14px;}
+.lbl{font-size:9px;color:var(--mist);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;}
+.row{display:flex;align-items:center;gap:8px;}
+.gap8{gap:8px;} .gap6{gap:6px;}
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px 20px;gap:12px;color:var(--mist);font-size:12px;font-family:'DM Mono',monospace;}
+.wave{display:flex;gap:4px;}
+.wave span{width:5px;height:5px;border-radius:50%;background:var(--blue);animation:wv 1.2s ease-in-out infinite;}
+.wave span:nth-child(2){animation-delay:0.2s;} .wave span:nth-child(3){animation-delay:0.4s;}
+@keyframes wv{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+
+/* CONDITIONS STRIP */
+.cond-strip{display:flex;gap:6px;padding:10px 14px 0;overflow-x:auto;scrollbar-width:none;}
+.cond-strip::-webkit-scrollbar{display:none;}
+.cp{flex-shrink:0;background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:9px 10px;min-width:70px;text-align:center;}
+.cp-lbl{font-size:9px;color:var(--mist);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;}
+.cp-val{font-size:14px;font-weight:600;margin:2px 0 1px;}
+.cp-sub{font-size:9px;color:var(--mist);}
+
+/* SUMMARY */
+.sum-card{margin:10px 14px 0;background:linear-gradient(135deg,rgba(26,107,60,0.16),rgba(16,40,72,0.9));border:1px solid rgba(37,168,94,0.2);border-radius:13px;padding:13px;}
+.sum-lbl{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--green);font-family:'DM Mono',monospace;margin-bottom:6px;}
+.sum-txt{font-size:12px;line-height:1.65;font-weight:300;}
+
+/* DATE NAV */
+.date-nav{display:flex;align-items:center;justify-content:center;gap:14px;padding:14px 14px 6px;}
+.date-arrow{background:var(--card);border:1px solid var(--bdr);border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:var(--white);-webkit-tap-highlight-color:transparent;}
+.date-arrow:active{background:var(--bdim);}
+.date-label{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:var(--white);min-width:140px;text-align:center;}
+
+/* DEST CARDS */
+.dest-list{padding:0 14px;display:flex;flex-direction:column;gap:8px;}
+.dest-card{background:var(--card);border:1px solid var(--bdr);border-radius:13px;overflow:hidden;transition:border-color 0.2s;}
+.dest-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 13px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;}
+.dest-left{display:flex;align-items:center;gap:10px;}
+.dest-icon{font-size:22px;flex-shrink:0;}
+.dest-name{font-size:13px;font-weight:600;}
+.dest-meta{font-size:10px;color:var(--mist);margin-top:1px;}
+.trip-dots{display:flex;gap:5px;align-items:center;}
+.trip-dot{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.trip-dot-circle{width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.2);}
+.trip-dot-lbl{font-size:7px;color:var(--mist);font-family:'DM Mono',monospace;text-transform:uppercase;}
+.td-green{background:var(--green);}
+.td-yellow{background:var(--yellow);}
+.td-red{background:var(--red);}
+.td-nogo{background:var(--nogo);}
+.td-unknown{background:#444;}
+.chevron{color:var(--mist);transition:transform 0.25s;font-size:10px;margin-left:4px;}
+.dest-card.expanded .chevron{transform:rotate(180deg);}
+.dest-detail{display:none;border-top:1px solid var(--bdr);padding:12px 13px;animation:sd 0.2s ease;}
+.dest-card.expanded .dest-detail{display:block;}
+@keyframes sd{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+/* TRIP LEGS */
+.trip-section{margin-bottom:11px;}
+.trip-sec-title{font-size:10px;color:var(--mist);text-transform:uppercase;letter-spacing:1.5px;font-family:'DM Mono',monospace;margin-bottom:6px;}
+.leg-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;}
+.leg-card{border-radius:9px;padding:9px 7px;text-align:center;border:1px solid rgba(255,255,255,0.08);}
+.leg-card.green{background:var(--gdim);border-color:rgba(37,168,94,0.3);}
+.leg-card.yellow{background:var(--ydim);border-color:rgba(232,160,32,0.25);}
+.leg-card.red{background:var(--rdim);border-color:rgba(192,57,43,0.22);}
+.leg-card.nogo{background:var(--ndim);border-color:rgba(122,31,31,0.5);}
+.leg-card.unknown{background:rgba(255,255,255,0.04);}
+.leg-emoji{font-size:18px;}
+.leg-name{font-size:9px;color:var(--mist);font-family:'DM Mono',monospace;text-transform:uppercase;margin-top:2px;}
+.leg-detail{font-size:10px;color:var(--white);margin-top:3px;line-height:1.4;}
+
+/* NARRATIVE */
+.narr-box{background:rgba(52,152,219,0.07);border:1px solid rgba(52,152,219,0.14);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--mist);line-height:1.55;margin-bottom:10px;}
+
+/* SPECIES */
+.sp-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px;}
+.sp-chip{border-radius:20px;padding:4px 9px;font-size:10px;font-weight:500;display:flex;align-items:center;gap:3px;border:1px solid transparent;}
+.sp-chip.prime{background:rgba(37,168,94,0.14);border-color:rgba(37,168,94,0.32);color:#4fd68a;}
+.sp-chip.possible{background:rgba(232,160,32,0.1);border-color:rgba(232,160,32,0.28);color:#f5c842;}
+.sp-chip.unlikely{background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.08);color:var(--mist);}
+
+/* NOTES */
+.notes-ta{background:rgba(10,22,40,0.5);border:1px solid var(--bdr);border-radius:7px;width:100%;padding:8px 10px;color:var(--white);font-family:'DM Sans',sans-serif;font-size:11px;resize:none;min-height:50px;outline:none;}
+.notes-ta:focus{border-color:rgba(52,152,219,0.4);}
+.notes-ta::placeholder{color:var(--mist);opacity:0.5;}
+.notes-ts{font-size:9px;color:var(--mist);font-family:'DM Mono',monospace;margin-top:2px;}
+
+/* FORECAST */
+.fc-strip{display:flex;gap:8px;padding:0 14px;}
+.fc-day{flex:1;background:var(--card);border:1px solid var(--bdr);border-radius:11px;padding:10px 7px;text-align:center;}
+.fc-name{font-size:10px;color:var(--mist);font-family:'DM Mono',monospace;text-transform:uppercase;}
+.fc-emoji{font-size:19px;margin:4px 0;}
+.fc-swell{font-size:11px;font-weight:500;}
+.fc-wind{font-size:10px;color:var(--mist);margin-top:1px;}
+
+/* MAP CONTROLS */
+.map-ctrl{background:rgba(10,22,40,0.95);border-bottom:1px solid var(--bdr);padding:8px 12px;flex-shrink:0;}
+.mode-toggle{display:flex;border-radius:8px;overflow:hidden;border:1px solid var(--bdr);margin-bottom:8px;}
+.mode-btn{flex:1;padding:7px;font-size:11px;font-family:'DM Mono',monospace;background:rgba(10,22,40,0.6);border:none;color:var(--mist);cursor:pointer;transition:all 0.15s;-webkit-tap-highlight-color:transparent;}
+.mode-btn.active{background:rgba(37,168,94,0.2);color:var(--green);}
+.ctrl-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+.map-sel{background:rgba(10,22,40,0.9);border:1px solid var(--bdr);border-radius:7px;color:var(--white);font-family:'DM Mono',monospace;font-size:10px;padding:6px 24px 6px 8px;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%238fa8c0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;}
+.time-slider-wrap{flex:1;display:flex;flex-direction:column;gap:2px;}
+.time-slider{width:100%;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;background:var(--bdr);outline:none;}
+.time-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--green);cursor:pointer;}
+.time-slider-lbl{font-size:9px;color:var(--mist);font-family:'DM Mono',monospace;text-align:center;}
+
+/* TRIP PLANNER CONTROLS */
+.tp-ctrl{background:rgba(10,22,40,0.95);padding:8px 12px;border-bottom:1px solid var(--bdr);}
+.tp-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;}
+.tp-field{display:flex;flex-direction:column;gap:3px;}
+.tp-lbl{font-size:9px;color:var(--mist);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:1px;}
+.tp-input{background:rgba(10,22,40,0.8);border:1px solid var(--bdr);border-radius:7px;color:var(--white);font-family:'DM Mono',monospace;font-size:11px;padding:6px 8px;outline:none;width:100%;}
+.tp-input:focus{border-color:rgba(37,168,94,0.4);}
+.tp-calc-btn{width:100%;padding:8px;background:rgba(37,168,94,0.2);border:1px solid rgba(37,168,94,0.35);border-radius:7px;color:var(--green);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.tp-calc-btn:active{background:rgba(37,168,94,0.35);}
+.tp-summary{background:rgba(10,22,40,0.6);border:1px solid var(--bdr);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--mist);line-height:1.55;display:none;}
+
+/* MAP LEGEND */
+.map-legend{display:flex;gap:10px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--bdr);flex-wrap:wrap;}
+.leg-i{display:flex;align-items:center;gap:3px;font-size:9px;color:var(--mist);font-family:'DM Mono',monospace;}
+.leg-d{width:9px;height:9px;border-radius:50%;}
+
+/* LINKS */
+.links-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:0 14px;}
+.link-btn{background:var(--card);border:1px solid var(--bdr);border-radius:11px;padding:12px;text-decoration:none;color:var(--white);display:flex;flex-direction:column;gap:3px;-webkit-tap-highlight-color:transparent;}
+.link-btn:active{background:var(--bdim);}
+.link-btn .li{font-size:17px;} .link-btn .ln{font-size:11px;font-weight:500;} .link-btn .ld{font-size:9px;color:var(--mist);}
+.lf{grid-column:span 2;flex-direction:row!important;align-items:center;gap:11px!important;background:linear-gradient(135deg,rgba(26,107,60,0.2),rgba(16,40,72,0.9))!important;border-color:rgba(37,168,94,0.25)!important;}
+
+/* SETTINGS */
+.set-wrap{padding:14px;}
+.set-title{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;margin-bottom:10px;}
+.set-row{background:var(--card);border:1px solid var(--bdr);border-radius:11px;padding:12px 13px;margin-bottom:7px;}
+.set-lbl{font-size:10px;color:var(--mist);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;margin-bottom:6px;}
+select{background:rgba(10,22,40,0.8);border:1px solid var(--bdr);border-radius:7px;color:var(--white);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 28px 6px 9px;width:100%;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%238fa8c0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;}
+.sp-toggles{display:flex;flex-wrap:wrap;gap:5px;}
+.sp-tog{padding:5px 11px;border-radius:20px;font-size:11px;font-weight:500;border:1px solid var(--bdr);background:rgba(10,22,40,0.5);color:var(--mist);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.sp-tog.on{background:rgba(37,168,94,0.18);border-color:rgba(37,168,94,0.45);color:#4fd68a;}
+
+/* 4-BAR CONDITIONS DISPLAY */
+.cond-bars{display:flex;flex-direction:column;gap:2px;width:16px;flex-shrink:0;}
+.cond-bar{height:6px;border-radius:2px;width:100%;transition:background 0.3s;}
+.cond-bar.smooth{background:var(--green);}
+.cond-bar.bumpy{background:var(--yellow);}
+.cond-bar.rough{background:var(--red);}
+.cond-bar.nogo{background:repeating-linear-gradient(90deg,#c0392b 0px,#c0392b 3px,#1a1a1a 3px,#1a1a1a 5px);}
+.cond-bar.unknown{background:#333;opacity:0.5;}
+
+/* FORECAST 4-BAR GRID */
+.fc-bars-col{display:flex;flex-direction:column;gap:2px;align-items:center;}
+.fc-bar-row{display:flex;gap:2px;}
+.fc-bar-seg{height:7px;border-radius:2px;flex:1;}
+.fc-bar-seg.smooth{background:var(--green);}
+.fc-bar-seg.bumpy{background:var(--yellow);}
+.fc-bar-seg.rough{background:var(--red);}
+.fc-bar-seg.nogo{background:repeating-linear-gradient(90deg,#c0392b 0px,#c0392b 3px,#1a1a1a 3px,#1a1a1a 5px);}
+.fc-bar-seg.unknown{background:#333;opacity:0.4;}
+
+/* DEBUG */
+#dbg{display:none;margin:6px 14px;background:rgba(0,0,0,0.7);border:1px solid #333;border-radius:9px;padding:10px;font-family:monospace;font-size:10px;color:#aef;line-height:1.65;white-space:pre-wrap;word-break:break-all;}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-row">
+    <div>
+      <div class="app-title">SoCal Fish</div>
+      <div class="app-sub" id="portLabel">Channel Islands Harbor</div>
+    </div>
+    <div class="hdr-btns">
+      <button class="refresh-btn" onclick="refreshData()" id="refreshBtn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0018.49 15"/></svg>
+        REFRESH
+      </button>
+    </div>
+  </div>
+  <div class="last-upd" id="lastUpd">Tap refresh to load conditions</div>
+</div>
+
+<!-- CONTENT -->
+<div class="content" id="mainContent">
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="page-dashboard">
+    
+
+    <!-- Date navigator -->
+    <div class="date-nav">
+      <div class="date-arrow" onclick="shiftDate(-1)">‹</div>
+      <div class="date-label" id="dateLabel">TODAY</div>
+      <div class="date-arrow" onclick="shiftDate(1)">›</div>
+    </div>
+
+    <!-- Conditions strip -->
+    <div class="cond-strip" id="condStrip">
+      <div class="cp"><div class="cp-lbl">Swell</div><div class="cp-val">–</div><div class="cp-sub">–</div></div>
+      <div class="cp"><div class="cp-lbl">Wind</div><div class="cp-val">–</div><div class="cp-sub">–</div></div>
+      <div class="cp"><div class="cp-lbl">SST</div><div class="cp-val">–</div><div class="cp-sub">–</div></div>
+      <div class="cp"><div class="cp-lbl">Tide</div><div class="cp-val">–</div><div class="cp-sub">–</div></div>
+      <div class="cp"><div class="cp-lbl">Moon</div><div class="cp-val" style="font-size:18px">🌑</div><div class="cp-sub" style="font-size:8px">–</div></div>
+    </div>
+
+    <!-- Summary -->
+    <div class="sum-card">
+      <div class="sum-lbl">📍 Daily Outlook</div>
+      <div class="sum-txt" id="sumTxt">Refresh conditions to see today's outlook.</div>
+    </div>
+
+    <!-- Dest list -->
+    <div class="sec-hdr"><span class="sec-title">DESTINATIONS</span><span class="sec-sub">TAP TO EXPAND</span></div>
+    <div class="dest-list" id="destList">
+      <div class="loading"><div class="wave"><span></span><span></span><span></span></div>Tap REFRESH to begin</div>
+    </div>
+    <div style="height:12px"></div>
+  </div>
+
+  <!-- FORECAST -->
+  <div class="page" id="page-forecast">
+    <div class="sec-hdr"><span class="sec-title">5-DAY OUTLOOK</span></div>
+    <div id="fcContent"><div class="loading"><div class="wave"><span></span><span></span><span></span></div>Load conditions first</div></div>
+    <div style="height:12px"></div>
+  </div>
+
+  <!-- MAP (flex column, handled specially) -->
+  <div class="page" id="page-map">
+    <!-- Mode toggle -->
+    <div class="map-ctrl">
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="modeCondBtn" onclick="setMapMode('conditions')">🌊 Conditions</button>
+        <button class="mode-btn" id="modeTripBtn" onclick="setMapMode('trip')">🗺 Trip Planner</button>
+      </div>
+
+      <!-- CONDITIONS controls -->
+      <div id="condCtrl">
+        <div class="ctrl-row">
+          <div class="time-slider-wrap">
+            <input type="range" class="time-slider" id="timeSlider" min="0" max="39" value="0" oninput="onSliderChange(this.value)">
+            <div class="time-slider-lbl" id="sliderLbl">Now — loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TRIP PLANNER controls -->
+      <div id="tripCtrl" style="display:none">
+        <div class="tp-row">
+          <div class="tp-field">
+            <div class="tp-lbl">Destination</div>
+            <select class="map-sel" id="tpDest" style="width:100%"></select>
+          </div>
+          <div class="tp-field">
+            <div class="tp-lbl">Depart Date</div>
+            <input type="date" class="tp-input" id="tpDate">
+          </div>
+        </div>
+        <div class="tp-row">
+          <div class="tp-field">
+            <div class="tp-lbl">Depart Time</div>
+            <input type="time" class="tp-input" id="tpDepartTime" value="06:00">
+          </div>
+          <div class="tp-field">
+            <div class="tp-lbl">Return Depart</div>
+            <input type="time" class="tp-input" id="tpReturnTime" value="15:00">
+          </div>
+        </div>
+        <div class="tp-row" style="margin-bottom:0">
+          <div class="tp-field">
+            <div class="tp-lbl">Return Date</div>
+            <input type="date" class="tp-input" id="tpReturnDate">
+          </div>
+          <div class="tp-field" style="justify-content:flex-end">
+            <div class="tp-lbl" style="opacity:0">.</div>
+            <button class="tp-calc-btn" onclick="runTripPlanner()">▶ PLAN TRIP</button>
+          </div>
+        </div>
+        <div class="tp-summary" id="tpSummary"></div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="map-legend">
+      <div class="leg-i"><div class="leg-d" style="background:var(--green)"></div>Smooth</div>
+      <div class="leg-i"><div class="leg-d" style="background:var(--yellow)"></div>Bumpy</div>
+      <div class="leg-i"><div class="leg-d" style="background:var(--red)"></div>Rough</div>
+      <div class="leg-i"><div class="leg-d" style="background:linear-gradient(135deg,#c0392b 50%,#1a1a1a 50%);border:1px solid #c0392b"></div>No-Go</div>
+      <div class="leg-i"><div class="leg-d" style="background:#444"></div>No Data</div>
+      <div class="leg-i" id="legAnch" style="display:none"><div class="leg-d" style="background:#9b59b6"></div>Anchorage</div>
+    <div class="leg-i"><div class="leg-d" style="background:#e67e22;font-size:8px;color:white;display:flex;align-items:center;justify-content:center;font-weight:900">!</div>MPA</div>
+    <div class="leg-i"><div class="leg-d" style="background:#666;font-size:8px;color:white;display:flex;align-items:center;justify-content:center;font-weight:900">✕</div>Naval</div>
+    <button onclick="toggleMPALayer()" id="mpaToggleBtn" style="background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.4);border-radius:5px;color:#e88;font-size:9px;font-family:monospace;padding:3px 7px;cursor:pointer">MPA Bounds: OFF</button>
+    <button onclick="toggleShadowLayer()" id="shadowToggleBtn" style="background:rgba(37,168,94,0.15);border:1px solid rgba(37,168,94,0.3);border-radius:5px;color:var(--green);font-size:9px;font-family:monospace;padding:3px 7px;cursor:pointer">Lee Shadows: ON</button>
+    </div>
+
+    <div id="mapWrap"><div id="fishMap"></div></div>
+  </div>
+
+  <!-- LINKS -->
+  <div class="page" id="page-links">
+    <div class="sec-hdr"><span class="sec-title">QUICK LINKS</span></div>
+    <div class="links-grid">
+      <a href="https://fishdope.com" target="_blank" class="link-btn lf"><span class="li">🐟</span><div><div class="ln">Fishdope</div><div class="ld">SST · Bite reports · Offshore marks</div></div></a>
+      <a href="https://976tuna.com" target="_blank" class="link-btn"><span class="li">🎣</span><div class="ln">976-Tuna</div><div class="ld">Fish counts</div></a>
+      <a href="https://socalfishreports.com" target="_blank" class="link-btn"><span class="li">📋</span><div class="ln">SoCal Reports</div><div class="ld">Bite reports</div></a>
+      <a href="https://thefishcounts.com" target="_blank" class="link-btn"><span class="li">📊</span><div class="ln">Fish Counts</div><div class="ld">Landing totals</div></a>
+      <a href="https://wildlife.ca.gov/Fishing/Ocean" target="_blank" class="link-btn"><span class="li">📜</span><div class="ln">CDFW Regs</div><div class="ld">Species & closures</div></a>
+      <a href="https://www.ndbc.noaa.gov" target="_blank" class="link-btn"><span class="li">🌊</span><div class="ln">NOAA Buoys</div><div class="ld">Raw buoy data</div></a>
+      <a href="https://www.weather.gov/lox/marine" target="_blank" class="link-btn"><span class="li">⛅</span><div class="ln">Marine Forecast</div><div class="ld">NWS zone text</div></a>
+      <a href="https://www.venturasportfishing.com" target="_blank" class="link-btn"><span class="li">🦐</span><div class="ln">Ventura Sport</div><div class="ld">Bait availability</div></a>
+    </div>
+    <div style="height:12px"></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="page" id="page-settings">
+    <div class="set-wrap">
+      <div class="set-title">SETTINGS</div>
+      <div class="set-row">
+        <div class="set-lbl">Vessel Size</div>
+        <select id="boatSelect" onchange="saveSettings()">
+          <option value="small">Small (18-22 ft)</option>
+          <option value="medium" selected>Medium (23-26 ft) — Parker 2520 XLD</option>
+          <option value="large">Large (27-32 ft)</option>
+          <option value="sport">Sport Fisher (33+ ft)</option>
+        </select>
+      </div>
+      <div class="set-row">
+        <div class="set-lbl">Home Port</div>
+        <select id="portSelect" onchange="saveSettings()">
+          <option value="CIH" selected>Channel Islands Harbor (Oxnard)</option>
+          <option value="VEN">Ventura Harbor</option>
+          <option value="SB">Santa Barbara Harbor</option>
+          <option value="MLR">Marina del Rey</option>
+          <option value="KH">King Harbor (Redondo)</option>
+          <option value="PH">Port Hueneme</option>
+        </select>
+      </div>
+
+      <div class="set-row">
+        <div class="set-lbl">Dashboard Destinations (5 slots)</div>
+        <div id="destSlots"></div>
+      </div>
+      <div style="padding:8px 0;font-size:11px;color:var(--mist);line-height:1.7;">
+        ⚙️ Parker 2520 XLD · 25 ft · Thresholds calibrated<br>
+        🔒 All data saved locally on this device
+      </div>
+
+      <!-- CUSTOM SPOTS -->
+      <div class="set-row">
+        <div class="set-lbl">📌 Custom Spots <span style="color:var(--mist);font-weight:300;text-transform:none;letter-spacing:0;font-size:10px">— temporary locations</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+          <input type="text" id="csName" class="tp-input" placeholder="Spot name" style="grid-column:span 2">
+          <input type="number" id="csLat" class="tp-input" placeholder="Latitude (e.g. 33.442)" step="0.001">
+          <input type="number" id="csLng" class="tp-input" placeholder="Longitude (e.g. -118.497)" step="0.001">
+        </div>
+        <div style="margin-bottom:7px">
+          <select id="csType" class="map-sel" style="width:100%">
+            <option value="offshore-bank">Offshore Bank</option>
+            <option value="island-structure">Island Structure</option>
+            <option value="nearshore-kelp">Nearshore Kelp</option>
+            <option value="nearshore-flat">Nearshore Flat</option>
+            <option value="custom">Other</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button onclick="handleAddCustomSpot()" style="flex:1;padding:8px;background:rgba(37,168,94,0.2);border:1px solid rgba(37,168,94,0.35);border-radius:7px;color:var(--green);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer">📌 Add Spot</button>
+          <button onclick="exportCustomSpots()" style="padding:8px 12px;background:rgba(52,152,219,0.15);border:1px solid rgba(52,152,219,0.3);border-radius:7px;color:var(--blue);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer">Export JS</button>
+        </div>
+        <div id="customSpotsList" style="display:flex;flex-direction:column;gap:5px"></div>
+      </div>
+
+      <!-- TRIP LOG -->
+      <div class="set-row" id="tripLogSection">
+        <div class="set-lbl">Trip Log <span style="color:var(--mist);font-weight:300;text-transform:none;letter-spacing:0;font-size:10px">— calibration notes</span></div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+          <input type="date" id="logDate" class="tp-input" style="flex:1;min-width:120px">
+          <select id="logDest" class="map-sel" style="flex:1;min-width:140px"></select>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <select id="logRating" class="map-sel" style="flex:1">
+            <option value="much_calmer">Much calmer than predicted</option>
+            <option value="calmer">Somewhat calmer</option>
+            <option value="as_expected" selected>As expected</option>
+            <option value="rougher">Somewhat rougher</option>
+            <option value="much_rougher">Much rougher than predicted</option>
+          </select>
+        </div>
+        <textarea id="logNotes" class="notes-ta" placeholder="Notes: conditions, timing, what surprised you..." rows="2" style="margin-bottom:6px"></textarea>
+        <div style="display:flex;gap:6px">
+          <button onclick="addTripLog()" style="flex:1;padding:8px;background:rgba(37,168,94,0.2);border:1px solid rgba(37,168,94,0.35);border-radius:7px;color:var(--green);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer">+ Add Entry</button>
+          <button onclick="exportTripLog()" style="padding:8px 12px;background:rgba(52,152,219,0.15);border:1px solid rgba(52,152,219,0.3);border-radius:7px;color:var(--blue);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer">Export CSV</button>
+        </div>
+        <div id="tripLogList" style="margin-top:10px;display:flex;flex-direction:column;gap:5px;max-height:300px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- content -->
+
+<!-- NAV -->
+<div class="nav">
+  <button class="nav-btn active" onclick="showPage('dashboard')" id="nav-dashboard">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard
+  </button>
+  <button class="nav-btn" onclick="showPage('forecast')" id="nav-forecast">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Forecast
+  </button>
+  <button class="nav-btn" onclick="showPage('map');initMap()" id="nav-map">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>Map
+  </button>
+  <button class="nav-btn" onclick="showPage('links')" id="nav-links">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>Links
+  </button>
+  <button class="nav-btn" onclick="showPage('settings')" id="nav-settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings
+  </button>
+</div>
+
+</div><!-- app -->
+<script>
+// ═══════════════════════════════════════════════════════════
+// ISLAND GEOMETRY
+// axis: primary long-axis bearing (degrees true)
+// Each island blocks swell/wind from directions roughly
+// perpendicular to its axis on the upwind face
+// ═══════════════════════════════════════════════════════════
+const ISLANDS = {
+  anacapa:      {lat:34.008,lng:-119.393,axis:85, lenNm:5,  widNm:1,  name:'Anacapa'},
+  santa_cruz:   {lat:34.030,lng:-119.780,axis:82, lenNm:22, widNm:6,  name:'Santa Cruz'},
+  santa_rosa:   {lat:33.970,lng:-120.105,axis:78, lenNm:15, widNm:8,  name:'Santa Rosa'},
+  san_miguel:   {lat:34.040,lng:-120.370,axis:85, lenNm:9,  widNm:4,  name:'San Miguel'},
+  san_nicolas:  {lat:33.255,lng:-119.508,axis:65, lenNm:9,  widNm:4,  name:'San Nicolas'},
+  san_clemente: {lat:32.920,lng:-118.488,axis:135,lenNm:21, widNm:4,  name:'San Clemente'},
+  catalina:     {lat:33.385,lng:-118.416,axis:125,lenNm:21, widNm:5,  name:'Catalina'},
+  santa_barbara_island:{lat:33.477,lng:-119.033,axis:0,lenNm:1,widNm:1,name:'Santa Barbara Island'},
+};
+
+// ═══════════════════════════════════════════════════════════
+// ANCHORAGE CANDIDATES
+// leeBearing: compass bearing of the protected side
+// bestSwellRange: swell directions this anchorage shelters from
+// ═══════════════════════════════════════════════════════════
+const ANCHORAGES = [
+  {key:'cat_isthmus',  name:'Catalina — Isthmus',     lat:33.443,lng:-118.498,island:'catalina',     leeBearing:180, bestSwellFrom:[270,360], notes:'Best NW shelter, amenities ashore'},
+  {key:'cat_avalon',   name:'Catalina — Avalon',       lat:33.350,lng:-118.328,island:'catalina',     leeBearing:200, bestSwellFrom:[270,360], notes:'Good NW/W shelter, mooring balls'},
+  {key:'scuz_prison',  name:'Santa Cruz — Prisoners',  lat:34.017,lng:-119.685,island:'santa_cruz',   leeBearing:180, bestSwellFrom:[270,360], notes:'Classic overnight, calm in NW swell'},
+  {key:'scuz_platt',   name:'Santa Cruz — Platts',     lat:33.990,lng:-119.830,island:'santa_cruz',   leeBearing:170, bestSwellFrom:[280,350], notes:'Protected cove, good holding'},
+  {key:'anac_fish',    name:'Anacapa — Fish Camp',     lat:34.005,lng:-119.360,island:'anacapa',      leeBearing:180, bestSwellFrom:[280,340], notes:'Limited lee, best in calm NW swell'},
+  {key:'sros_bechers', name:'Santa Rosa — Bechers Bay',lat:33.990,lng:-120.040,island:'santa_rosa',   leeBearing:170, bestSwellFrom:[280,350], notes:'Well protected in NW, kelp nearby'},
+  {key:'sbi_east',     name:'Santa Barbara Island',    lat:33.475,lng:-119.018,island:'santa_barbara_island',leeBearing:90,bestSwellFrom:[270,360], notes:'Limited lee — small island, use in calm only'},
+  {key:'snick_east',   name:'San Nicolas — East End',  lat:33.257,lng:-119.433,island:'san_nicolas',  leeBearing:90, bestSwellFrom:[270,340], notes:'Rolly in most conditions, emergency only'},
+];
+
+// ═══════════════════════════════════════════════════════════
+// PORTS
+// ═══════════════════════════════════════════════════════════
+const PORTS = {
+  CIH:{name:'Channel Islands Harbor',lat:34.157,lng:-119.222,tideStation:'9411340',buoys:['46054','46053']},
+  VEN:{name:'Ventura Harbor',        lat:34.232,lng:-119.267,tideStation:'9411340',buoys:['46054','46053']},
+  SB: {name:'Santa Barbara Harbor',  lat:34.408,lng:-119.690,tideStation:'9411340',buoys:['46053','46054']},
+  MLR:{name:'Marina del Rey',        lat:33.980,lng:-118.452,tideStation:'9410660',buoys:['46025','46086']},
+  KH: {name:'King Harbor (Redondo)', lat:33.832,lng:-118.398,tideStation:'9410660',buoys:['46025','46086']},
+  PH: {name:'Port Hueneme',          lat:34.148,lng:-119.202,tideStation:'9411340',buoys:['46054','46053']},
+};
+
+// ═══════════════════════════════════════════════════════════
+// FISHING SPOTS
+// waypoints: 2 intermediate lat/lng between port and destination
+// nearIsland: key in ISLANDS for shelter calc
+// aspect: compass bearing FROM port (used for transit scoring)
+// ═══════════════════════════════════════════════════════════
+const SPOTS = {
+  anacapa_lee:    {name:'Anacapa',        sub:'Lee Side',       lat:34.003,lng:-119.393,icon:'🏝️',buoys:['46054'],nearIsland:'anacapa',islandSide:'lee',depthType:'island-kelp',  waypoints:[[34.10,-119.30],[34.05,-119.37]],distances:{CIH:14,VEN:18,SB:30,MLR:45,KH:50,PH:12},species:['YT','WSB','Calico','Barracuda','Rockfish']},
+  anacapa_wind:   {name:'Anacapa',        sub:'Windward',       lat:34.018,lng:-119.410,icon:'🏝️',buoys:['46054'],nearIsland:'anacapa',islandSide:'wind',depthType:'island-kelp', waypoints:[[34.10,-119.30],[34.02,-119.39]],distances:{CIH:16,VEN:20,SB:32,MLR:47,KH:52,PH:14},species:['YT','WSB','Calico','Rockfish']},
+  santa_cruz_lee: {name:'Santa Cruz Is.',sub:'Lee Side',        lat:33.995,lng:-119.780,icon:'🏝️',buoys:['46054','46053'],nearIsland:'santa_cruz',islandSide:'lee',depthType:'island-kelp',waypoints:[[34.08,-119.45],[34.02,-119.65]],distances:{CIH:30,VEN:33,SB:35,MLR:55,KH:60,PH:28},species:['YT','WSB','Calico','BFT','Rockfish','OW']},
+  santa_cruz_wind:{name:'Santa Cruz Is.',sub:'Windward',        lat:34.075,lng:-119.800,icon:'🏝️',buoys:['46054','46053'],nearIsland:'santa_cruz',islandSide:'wind',depthType:'island-kelp',waypoints:[[34.12,-119.50],[34.07,-119.70]],distances:{CIH:33,VEN:36,SB:38,MLR:58,KH:63,PH:31},species:['YT','WSB','BFT','Rockfish','OW']},
+  santa_rosa:     {name:'Santa Rosa Is.',sub:'',                lat:33.970,lng:-120.105,icon:'🏝️',buoys:['46054','46011'],nearIsland:'santa_rosa',islandSide:'mixed',depthType:'island-kelp',waypoints:[[34.05,-119.65],[33.98,-119.92]],distances:{CIH:48,VEN:50,SB:42,MLR:70,KH:75,PH:46},species:['YT','WSB','Rockfish','OW','BFT']},
+  san_nicolas:    {name:'San Nicolas Is.',sub:'',               lat:33.255,lng:-119.508,icon:'🏝️',buoys:['46025'],nearIsland:'san_nicolas',islandSide:'mixed',depthType:'offshore-island',waypoints:[[34.00,-119.40],[33.60,-119.47]],distances:{CIH:62,VEN:65,SB:70,MLR:65,KH:58,PH:60},species:['BFT','YFT','YT','Dorado','Rockfish','OW']},
+  san_clemente:   {name:'San Clemente Is.',sub:'',              lat:32.920,lng:-118.488,icon:'🏝️',buoys:['46025','46086'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'offshore-island',waypoints:[[33.80,-118.90],[33.35,-118.65]],distances:{CIH:85,VEN:88,SB:95,MLR:68,KH:63,PH:83},species:['BFT','YFT','YT','Dorado','WSB','Rockfish','OW']},
+  catalina_isthmus:{name:'Catalina Is.',sub:'Isthmus',          lat:33.443,lng:-118.498,icon:'⛵',buoys:['46025','46086'],nearIsland:'catalina',islandSide:'lee',depthType:'island-kelp',waypoints:[[34.00,-118.95],[33.70,-118.65]],distances:{CIH:55,VEN:58,SB:65,MLR:28,KH:22,PH:53},species:['YT','WSB','Calico','Barracuda','BFT','OW']},
+  catalina_back:  {name:'Catalina Is.',sub:'Backside',          lat:33.330,lng:-118.350,icon:'⛵',buoys:['46025'],nearIsland:'catalina',islandSide:'wind',depthType:'island-kelp',waypoints:[[33.90,-118.80],[33.55,-118.55]],distances:{CIH:60,VEN:63,SB:70,MLR:30,KH:25,PH:58},species:['YT','WSB','Calico','BFT','Dorado']},
+  tanner:         {name:'Tanner Bank',sub:'',                   lat:32.700,lng:-119.133,icon:'🎯',buoys:['46047','46025'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[33.70,-119.10],[33.10,-119.13]],distances:{CIH:100,VEN:103,SB:110,MLR:85,KH:80,PH:98},species:['BFT','YFT','Dorado','YT']},
+  fathom43:       {name:'43 Fathom',sub:'',                     lat:33.870,lng:-119.533,icon:'🎯',buoys:['46054','46053'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[34.05,-119.38],[33.97,-119.47]],distances:{CIH:28,VEN:30,SB:35,MLR:48,KH:50,PH:26},species:['Rockfish','Lingcod','OW','YT']},
+  spot277:        {name:'277 Spot',sub:'',                      lat:34.017,lng:-119.500,icon:'🎯',buoys:['46054'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[34.10,-119.37],[34.06,-119.44]],distances:{CIH:22,VEN:25,SB:30,MLR:42,KH:44,PH:20},species:['Rockfish','Lingcod','YT','WSB']},
+  local_kelp:     {name:'Local Kelp',sub:'Oxnard/Ventura',      lat:34.120,lng:-119.330,icon:'🌿',buoys:['46054'],nearIsland:null,islandSide:null,depthType:'nearshore-kelp',waypoints:[[34.15,-119.27],[34.13,-119.31]],distances:{CIH:3,VEN:5,SB:18,MLR:30,KH:32,PH:4},species:['Calico','WSB','Halibut','Barracuda','YT']},
+  ventura_flats:  {name:'Ventura Flats',sub:'Halibut Grounds',  lat:34.190,lng:-119.350,icon:'🌊',buoys:['46054'],nearIsland:null,islandSide:null,depthType:'nearshore-flat',waypoints:[[34.17,-119.28],[34.19,-119.32]],distances:{CIH:6,VEN:4,SB:22,MLR:35,KH:37,PH:5},species:['Halibut','WSB','Barracuda']},
+  hueneme_canyon: {name:'Hueneme Canyon',sub:'',                lat:34.090,lng:-119.270,icon:'🌊',buoys:['46054'],nearIsland:null,islandSide:null,depthType:'nearshore-canyon',waypoints:[[34.15,-119.22],[34.11,-119.25]],distances:{CIH:5,VEN:7,SB:20,MLR:32,KH:30,PH:3},species:['Rockfish','Lingcod','Halibut','WSB']},
+  // Offshore banks
+  spot499:        {name:'499',sub:'The Slide',                  lat:33.275,lng:-118.767,icon:'🎯',buoys:['46025'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[34.00,-119.10],[33.60,-118.95]],distances:{CIH:88,VEN:90,SB:98,MLR:58,KH:54,PH:86},species:['BFT','YFT','YT','Dorado']},
+  osborn_bank:    {name:'Osborn Bank',sub:'',                   lat:33.360,lng:-119.042,icon:'🎯',buoys:['46025'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[33.90,-119.20],[33.60,-119.10]],distances:{CIH:72,VEN:75,SB:82,MLR:68,KH:60,PH:70},species:['BFT','YFT','YT','Rockfish','OW']},
+  mile14_bank:    {name:'14 Mile Bank',sub:'',                  lat:33.397,lng:-118.000,icon:'🎯',buoys:['46086','46025'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[33.85,-118.60],[33.60,-118.25]],distances:{CIH:95,VEN:97,SB:105,MLR:55,KH:48,PH:93},species:['BFT','YFT','YT','Dorado']},
+  potato_bank:    {name:'Potato Bank',sub:'',                   lat:33.250,lng:-119.827,icon:'🎯',buoys:['46047'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[33.80,-119.65],[33.45,-119.75]],distances:{CIH:85,VEN:88,SB:90,MLR:95,KH:98,PH:83},species:['BFT','YFT','YT','Dorado','Rockfish']},
+  kidney_63:      {name:'Kidney Bank',sub:'63 fa',              lat:33.575,lng:-119.014,icon:'🎯',buoys:['46025'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[34.00,-119.20],[33.78,-119.10]],distances:{CIH:65,VEN:68,SB:75,MLR:58,KH:52,PH:63},species:['Rockfish','Lingcod','OW','YT']},
+  patton_ridge:   {name:'Patton Ridge',sub:'',                  lat:33.500,lng:-120.500,icon:'🎯',buoys:['46047'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[33.90,-119.85],[33.65,-120.20]],distances:{CIH:95,VEN:98,SB:85,MLR:110,KH:115,PH:93},species:['BFT','YFT','YT','Dorado']},
+  sverdrup:       {name:'Sverdrup Bank',sub:'126 fa',           lat:33.133,lng:-120.367,icon:'🎯',buoys:['46047'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[33.60,-119.90],[33.30,-120.15]],distances:{CIH:110,VEN:112,SB:100,MLR:120,KH:122,PH:108},species:['BFT','YFT','Dorado']},
+  cortes_bank:    {name:'Cortes Bank',sub:'',                   lat:32.440,lng:-119.130,icon:'🎯',buoys:['46047'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[33.50,-119.00],[32.90,-119.10]],distances:{CIH:115,VEN:118,SB:125,MLR:95,KH:90,PH:113},species:['BFT','YFT','YT','Dorado','WSB']},
+  cherry_banks:   {name:'Cherry Banks',sub:'',                  lat:32.867,lng:-119.413,icon:'🎯',buoys:['46047','46025'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[33.60,-119.35],[33.15,-119.39]],distances:{CIH:92,VEN:95,SB:102,MLR:80,KH:75,PH:90},species:['BFT','YFT','YT','Dorado']},
+  hancock_bank:   {name:'Hancock Bank',sub:'',                  lat:32.567,lng:-119.700,icon:'🎯',buoys:['46047'],nearIsland:null,islandSide:null,depthType:'offshore-bank',waypoints:[[33.30,-119.60],[32.90,-119.66]],distances:{CIH:108,VEN:110,SB:105,MLR:105,KH:100,PH:106},mpa:false,naval:false},
+  // ── ISLAND DETAIL SPOTS ──
+  sbi_cave_canyon: {name:'Cave Canyon',sub:'WSB Zone',lat:33.4777,lng:-119.0252,icon:'📍',buoys:['46025'],nearIsland:'santa_barbara_island',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.478,-118.925],[33.478,-119.025]],distances:{CIH:42,VEN:45,SB:50,MLR:32,KH:27,PH:44},mpa:false,naval:false},
+  sbi_landing_cove: {name:'SBI Landing Cove',sub:'',lat:33.4853,lng:-119.0502,icon:'📍',buoys:['46025'],nearIsland:'santa_barbara_island',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.485,-118.950],[33.485,-119.050]],distances:{CIH:41,VEN:44,SB:49,MLR:31,KH:26,PH:43},mpa:false,naval:false},
+  sbi_arch_reef: {name:'SBI Arch Reef',sub:'Caution - boilers in big swell',lat:33.4810,lng:-119.0525,icon:'📍',buoys:['46025'],nearIsland:'santa_barbara_island',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.481,-118.952],[33.481,-119.052]],distances:{CIH:41,VEN:44,SB:49,MLR:31,KH:26,PH:43},mpa:false,naval:false},
+  sbi_three_sisters: {name:'SBI Three Sisters',sub:'Caution - boilers',lat:33.4670,lng:-119.0441,icon:'📍',buoys:['46025'],nearIsland:'santa_barbara_island',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.467,-118.944],[33.467,-119.044]],distances:{CIH:42,VEN:45,SB:50,MLR:32,KH:27,PH:44},mpa:false,naval:false},
+  sbi_sutil: {name:'SBI Sutil Island',sub:'Squid/YT zone',lat:33.4622,lng:-119.0455,icon:'📍',buoys:['46025'],nearIsland:'santa_barbara_island',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.462,-118.946],[33.462,-119.046]],distances:{CIH:43,VEN:46,SB:51,MLR:33,KH:28,PH:45},mpa:false,naval:false},
+  sni_blockhouse: {name:'SNI Blockhouse',sub:'',lat:33.2812,lng:-119.4886,icon:'📍',buoys:['46025'],nearIsland:'san_nicolas',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.281,-119.389],[33.281,-119.489]],distances:{CIH:54,VEN:57,SB:62,MLR:44,KH:39,PH:56},mpa:false,naval:false},
+  sni_east_squid: {name:'SNI East End Squid',sub:'Big area',lat:33.2417,lng:-119.4308,icon:'📍',buoys:['46025'],nearIsland:'san_nicolas',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.242,-119.331],[33.242,-119.431]],distances:{CIH:56,VEN:59,SB:64,MLR:46,KH:41,PH:58},mpa:false,naval:false},
+  sni_daytona: {name:'SNI Daytona Beach',sub:'',lat:33.2148,lng:-119.4472,icon:'📍',buoys:['46025'],nearIsland:'san_nicolas',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.215,-119.347],[33.215,-119.447]],distances:{CIH:58,VEN:61,SB:66,MLR:48,KH:43,PH:60},mpa:false,naval:false},
+  sni_dutch: {name:'SNI Dutch Harbor',sub:'',lat:33.2172,lng:-119.4871,icon:'📍',buoys:['46025'],nearIsland:'san_nicolas',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.217,-119.387],[33.217,-119.487]],distances:{CIH:58,VEN:61,SB:66,MLR:48,KH:43,PH:60},mpa:false,naval:false},
+  cat_eagle_rock: {name:'Catalina Eagle Rock',sub:'',lat:33.4725,lng:-118.6053,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.472,-118.505],[33.472,-118.605]],distances:{CIH:51,VEN:54,SB:59,MLR:41,KH:36,PH:53},mpa:false,naval:false},
+  cat_iron_bound: {name:'Catalina Iron Bound',sub:'',lat:33.4472,lng:-118.5781,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.447,-118.478],[33.447,-118.578]],distances:{CIH:53,VEN:56,SB:61,MLR:43,KH:38,PH:55},mpa:false,naval:false},
+  cat_whale_rock: {name:'Catalina Whale Rock',sub:'',lat:33.4327,lng:-118.5593,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.433,-118.459],[33.433,-118.559]],distances:{CIH:55,VEN:58,SB:63,MLR:45,KH:40,PH:57},mpa:false,naval:false},
+  cat_cape_cortes: {name:'Catalina Cape Cortes',sub:'',lat:33.4284,lng:-118.5333,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.428,-118.433],[33.428,-118.533]],distances:{CIH:56,VEN:59,SB:64,MLR:46,KH:41,PH:58},mpa:false,naval:false},
+  cat_lobster_bay: {name:'Catalina Lobster Bay',sub:'',lat:33.4278,lng:-118.5241,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.428,-118.424],[33.428,-118.524]],distances:{CIH:56,VEN:59,SB:64,MLR:46,KH:41,PH:58},mpa:false,naval:false},
+  cat_cat_harbor: {name:'Cat Harbor',sub:'Partial-take SMCA',lat:33.4237,lng:-118.5083,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.424,-118.408],[33.424,-118.508]],distances:{CIH:57,VEN:60,SB:65,MLR:47,KH:42,PH:59},mpa:true,naval:false},
+  cat_little_harbor: {name:'Catalina Little Harbor',sub:'',lat:33.3845,lng:-118.4761,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.385,-118.376],[33.385,-118.476]],distances:{CIH:59,VEN:62,SB:67,MLR:49,KH:44,PH:61},mpa:false,naval:false},
+  cat_farnsworth: {name:'Farnsworth Bank',sub:'Partial-take SMCA',lat:33.3427,lng:-118.5168,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.343,-118.417],[33.343,-118.517]],distances:{CIH:60,VEN:63,SB:68,MLR:50,KH:45,PH:62},mpa:true,naval:false},
+  cat_china_point_b: {name:'Catalina China Point (Back)',sub:'Partial-take SMCA',lat:33.3283,lng:-118.4688,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.328,-118.369],[33.328,-118.469]],distances:{CIH:62,VEN:65,SB:70,MLR:52,KH:47,PH:64},mpa:true,naval:false},
+  cat_ben_weston: {name:'Ben Weston Point',sub:'',lat:33.3585,lng:-118.4895,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.359,-118.389],[33.359,-118.489]],distances:{CIH:60,VEN:63,SB:68,MLR:50,KH:45,PH:62},mpa:false,naval:false},
+  cat_parsons: {name:'Parsons Landing',sub:'',lat:33.4765,lng:-118.5507,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.476,-118.451],[33.476,-118.551]],distances:{CIH:53,VEN:56,SB:61,MLR:43,KH:38,PH:55},mpa:false,naval:false},
+  cat_arrow_point: {name:'Arrow Point',sub:'Partial-take SMCA (no inverts)',lat:33.4777,lng:-118.5379,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.478,-118.438],[33.478,-118.538]],distances:{CIH:53,VEN:56,SB:61,MLR:43,KH:38,PH:55},mpa:true,naval:false},
+  cat_indian_rock: {name:'Indian Rock',sub:'Partial-take SMCA (no inverts)',lat:33.4687,lng:-118.5258,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.469,-118.426],[33.469,-118.526]],distances:{CIH:54,VEN:57,SB:62,MLR:44,KH:39,PH:56},mpa:true,naval:false},
+  cat_lions_head: {name:'Lions Head',sub:'Partial-take SMCA (no inverts)',lat:33.4539,lng:-118.5012,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.454,-118.401],[33.454,-118.501]],distances:{CIH:55,VEN:58,SB:63,MLR:45,KH:40,PH:57},mpa:true,naval:false},
+  cat_bird_rock: {name:'Bird Rock Reef',sub:'Stay west of MPA at 118 29.300',lat:33.4520,lng:-118.4888,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.452,-118.389],[33.452,-118.489]],distances:{CIH:56,VEN:59,SB:64,MLR:46,KH:41,PH:58},mpa:true,naval:false},
+  cat_yellowtail_pt: {name:'Catalina Yellowtail Point',sub:'Stay east of MPA at 118 27.000',lat:33.4333,lng:-118.4487,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.433,-118.349],[33.433,-118.449]],distances:{CIH:58,VEN:61,SB:66,MLR:48,KH:43,PH:60},mpa:true,naval:false},
+  cat_empire: {name:'Empire Landing',sub:'',lat:33.4288,lng:-118.4428,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.429,-118.343],[33.429,-118.443]],distances:{CIH:58,VEN:61,SB:66,MLR:48,KH:43,PH:60},mpa:false,naval:false},
+  cat_long_point: {name:'Catalina Long Point',sub:'Stay east-south of MPA',lat:33.4063,lng:-118.3663,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.406,-118.266],[33.406,-118.366]],distances:{CIH:62,VEN:65,SB:70,MLR:52,KH:47,PH:64},mpa:true,naval:false},
+  cat_hen_rock: {name:'Hen Rock Kelp',sub:'',lat:33.3997,lng:-118.3662,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.400,-118.266],[33.400,-118.366]],distances:{CIH:62,VEN:65,SB:70,MLR:52,KH:47,PH:64},mpa:false,naval:false},
+  cat_toyon_bay: {name:'Toyon Bay',sub:'',lat:33.3757,lng:-118.3529,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.376,-118.253],[33.376,-118.353]],distances:{CIH:64,VEN:67,SB:72,MLR:54,KH:49,PH:66},mpa:false,naval:false},
+  cat_jewfish_pt: {name:'Jewfish Point',sub:'',lat:33.3204,lng:-118.3028,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.320,-118.203],[33.320,-118.303]],distances:{CIH:68,VEN:71,SB:76,MLR:58,KH:53,PH:70},mpa:false,naval:false},
+  cat_slide: {name:'The Slide (Catalina)',sub:'',lat:33.3133,lng:-118.3030,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.313,-118.203],[33.313,-118.303]],distances:{CIH:68,VEN:71,SB:76,MLR:58,KH:53,PH:70},mpa:false,naval:false},
+  cat_west_humps1: {name:'West End Humps 1',sub:'',lat:33.4667,lng:-118.6193,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.467,-118.519],[33.467,-118.619]],distances:{CIH:51,VEN:54,SB:59,MLR:41,KH:36,PH:53},mpa:false,naval:false},
+  cat_west_humps2: {name:'West End Humps 2',sub:'',lat:33.4647,lng:-118.6195,icon:'📍',buoys:['46025'],nearIsland:'catalina',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.465,-118.520],[33.465,-118.620]],distances:{CIH:51,VEN:54,SB:59,MLR:41,KH:36,PH:53},mpa:false,naval:false},
+  sci_white_rock: {name:'SCI White Rock',sub:'',lat:32.8919,lng:-118.4393,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.892,-118.339],[32.892,-118.439]],distances:{CIH:85,VEN:88,SB:93,MLR:75,KH:70,PH:87},mpa:false,naval:false},
+  sci_pyramid_head: {name:'SCI Pyramid Head',sub:'',lat:32.8153,lng:-118.3542,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.815,-118.254],[32.815,-118.354]],distances:{CIH:91,VEN:94,SB:99,MLR:81,KH:76,PH:93},mpa:false,naval:false},
+  sci_pyramid_reef: {name:'SCI Pyramid Reef',sub:'',lat:32.8167,lng:-118.3583,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.817,-118.258],[32.817,-118.358]],distances:{CIH:91,VEN:94,SB:99,MLR:81,KH:76,PH:93},mpa:false,naval:false},
+  sci_pyramid_cove: {name:'SCI Pyramid Cove',sub:'',lat:32.8167,lng:-118.3833,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.817,-118.283],[32.817,-118.383]],distances:{CIH:91,VEN:94,SB:99,MLR:81,KH:76,PH:93},mpa:false,naval:false},
+  sci_eel_point: {name:'SCI Eel Point',sub:'',lat:32.9195,lng:-118.5568,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.919,-118.457],[32.919,-118.557]],distances:{CIH:81,VEN:84,SB:89,MLR:71,KH:66,PH:83},mpa:false,naval:false},
+  sci_seal_cove: {name:'SCI Seal Cove',sub:'',lat:32.9035,lng:-118.5355,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.904,-118.436],[32.904,-118.535]],distances:{CIH:83,VEN:86,SB:91,MLR:73,KH:68,PH:85},mpa:false,naval:false},
+  sci_mail_point: {name:'SCI Mail Point',sub:'',lat:32.8793,lng:-118.5215,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.879,-118.422],[32.879,-118.522]],distances:{CIH:84,VEN:87,SB:92,MLR:74,KH:69,PH:86},mpa:false,naval:false},
+  sci_china_point: {name:'SCI China Point',sub:'',lat:32.7958,lng:-118.4333,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.796,-118.333],[32.796,-118.433]],distances:{CIH:91,VEN:94,SB:99,MLR:81,KH:76,PH:93},mpa:false,naval:false},
+  sci_caves: {name:'SCI The Caves',sub:'',lat:32.8075,lng:-118.4028,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.807,-118.303],[32.807,-118.403]],distances:{CIH:91,VEN:94,SB:99,MLR:81,KH:76,PH:93},mpa:false,naval:false},
+  sci_29_fathom: {name:'SCI 29 Fathom Spot',sub:'',lat:32.7667,lng:-118.4083,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.767,-118.308],[32.767,-118.408]],distances:{CIH:93,VEN:96,SB:101,MLR:83,KH:78,PH:95},mpa:false,naval:false},
+  sci_desperation: {name:'SCI Desperation Reef',sub:'',lat:32.7587,lng:-118.4087,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.759,-118.309],[32.759,-118.409]],distances:{CIH:93,VEN:96,SB:101,MLR:83,KH:78,PH:95},mpa:false,naval:false},
+  sci_9_fathom: {name:'SCI 9 Fathom Spot',sub:'',lat:33.0442,lng:-118.6263,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.044,-118.526],[33.044,-118.626]],distances:{CIH:73,VEN:76,SB:81,MLR:63,KH:58,PH:75},mpa:false,naval:false},
+  sci_castle_rock: {name:'SCI Castle Rock',sub:'Naval Security Zone',lat:33.0350,lng:-118.6148,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.035,-118.515],[33.035,-118.615]],distances:{CIH:74,VEN:77,SB:82,MLR:64,KH:59,PH:76},mpa:false,naval:true},
+  sci_nw_harbor: {name:'SCI NW Harbor',sub:'Naval Security Zone',lat:33.0333,lng:-118.5875,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.033,-118.488],[33.033,-118.588]],distances:{CIH:74,VEN:77,SB:82,MLR:64,KH:59,PH:76},mpa:false,naval:true},
+  sci_west_cove: {name:'SCI West Cove',sub:'',lat:33.0083,lng:-118.5945,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[33.008,-118.495],[33.008,-118.594]],distances:{CIH:76,VEN:79,SB:84,MLR:66,KH:61,PH:78},mpa:false,naval:false},
+  sci_dunes: {name:'SCI The Dunes',sub:'',lat:32.9910,lng:-118.5895,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.991,-118.490],[32.991,-118.590]],distances:{CIH:77,VEN:80,SB:85,MLR:67,KH:62,PH:79},mpa:false,naval:false},
+  sci_lost_point: {name:'SCI Lost Point',sub:'',lat:32.8510,lng:-118.5035,icon:'📍',buoys:['46025'],nearIsland:'san_clemente',islandSide:'mixed',depthType:'island-structure',waypoints:[[32.851,-118.404],[32.851,-118.504]],distances:{CIH:86,VEN:89,SB:94,MLR:76,KH:71,PH:88},mpa:false,naval:false},
+};
+
+const BOATS = {
+  small:  {label:'Small (18-22 ft)',      nogoWave:5,  nogoWind:15, roughWave:3.5, bumpyWave:2.0, roughWind:12, bumpyWind:8},
+  medium: {label:'Medium (23-26 ft)',     nogoWave:7,  nogoWind:18, roughWave:5.0, bumpyWave:3.0, roughWind:14, bumpyWind:10},
+  large:  {label:'Large (27-32 ft)',      nogoWave:9,  nogoWind:22, roughWave:6.5, bumpyWave:4.0, roughWind:18, bumpyWind:12},
+  sport:  {label:'Sport Fisher (33+ ft)', nogoWave:12, nogoWind:25, roughWave:8.0, bumpyWave:5.0, roughWind:22, bumpyWind:15},
+};
+// ═══════════════════════════════════════════════════════════
+// TIME WINDOWS
+// ═══════════════════════════════════════════════════════════
+const TIME_WINDOWS = [
+  {key:'morning',   label:'Morn',  hours:[5,6,7,8,9,10],       icon:'🌅'},
+  {key:'afternoon', label:'Aftn',  hours:[11,12,13,14,15,16],   icon:'☀️'},
+  {key:'evening',   label:'Eve',   hours:[17,18,19,20],         icon:'🌆'},
+  {key:'overnight', label:'Nght',  hours:[21,22,23,0,1,2,3,4], icon:'🌙'},
+];
+
+// ═══════════════════════════════════════════════════════════
+// CANONICAL FORECAST LOOKUP
+// Single source of truth for mapping (date, hour) → array index
+// All scoring functions must use this — never do ad-hoc lookups
+// ═══════════════════════════════════════════════════════════
+
+// Returns the hourly forecast array index for a given local date + hour
+// Returns -1 if not found or data unavailable
+function dateToForecastIndex(dateObj, hour){
+  if(!S.forecastData?.hourly?.time?.length) return -1;
+  // Build local ISO prefix to match against forecast time strings
+  // Forecast times are in local timezone (we request with timezone=America/Los_Angeles)
+  // Format: "2025-05-21T14:00" — match on date + hour
+  const yr  = dateObj.getFullYear();
+  const mo  = String(dateObj.getMonth()+1).padStart(2,'0');
+  const dy  = String(dateObj.getDate()).padStart(2,'0');
+  // Handle overnight hours that spill to next calendar day
+  let targetDate = dateObj;
+  let targetHour = hour;
+  if(hour > 23){ targetHour = hour - 24; targetDate = new Date(dateObj.getTime()+86400000); }
+  if(hour < 0) { targetHour = hour + 24; targetDate = new Date(dateObj.getTime()-86400000); }
+  const tyr = targetDate.getFullYear();
+  const tmo = String(targetDate.getMonth()+1).padStart(2,'0');
+  const tdy = String(targetDate.getDate()).padStart(2,'0');
+  const prefix = tyr+'-'+tmo+'-'+tdy+'T'+String(targetHour).padStart(2,'0');
+  const idx = S.forecastData.hourly.time.findIndex(t => t.startsWith(prefix));
+  return idx; // -1 if not found
+}
+
+// Get forecast conditions at a specific date + hour
+// Returns a conditions object or null if unavailable
+// If the requested time is in the past or before the array, clamps to earliest available
+function getForecastConditions(dateObj, hour){
+  if(!S.forecastData?.hourly?.time?.length) return null;
+  let idx = dateToForecastIndex(dateObj, hour);
+  // If not found (past hours or outside range), find nearest available index
+  if(idx < 0){
+    // Build target timestamp and find closest available
+    const yr=dateObj.getFullYear(), mo=String(dateObj.getMonth()+1).padStart(2,'0');
+    const dy=String(dateObj.getDate()).padStart(2,'0');
+    const targetStr=yr+'-'+mo+'-'+dy+'T'+String(hour).padStart(2,'0');
+    // Find the index of the first available hour on or after the target
+    idx = S.forecastData.hourly.time.findIndex(t=>t>=targetStr);
+    // If still not found, use the first available index (earliest data)
+    if(idx < 0) idx = 0;
+  }
+  const h = S.forecastData.hourly;
+  if(idx >= h.wave_height.length) return null;
+  return {
+    waveHt:    h.wave_height[idx]    ?? null,
+    wavePeriod:h.wave_period[idx]    ?? 8,
+    waveDir:   h.wave_direction[idx] ?? 300,
+    windSpd:   h.wind_speed[idx]     ?? null,
+    windDir:   h.wind_direction[idx] ?? 315,
+  };
+}
+
+// Get daily fallback conditions for a date (uses daily max — last resort only)
+function getDailyFallback(dateObj){
+  if(!S.forecastData?.daily?.time?.length) return null;
+  const dateStr = dateObj.getFullYear()+'-'+String(dateObj.getMonth()+1).padStart(2,'0')+'-'+String(dateObj.getDate()).padStart(2,'0');
+  const di = S.forecastData.daily.time.findIndex(t=>t===dateStr);
+  if(di < 0) return null;
+  const d = S.forecastData.daily;
+  return {
+    waveHt:    d.wave_height_max[di]    ?? null,
+    wavePeriod:d.wave_period_max?.[di]  ?? 8,
+    waveDir:   300, // daily doesn't have direction
+    windSpd:   d.wind_speed_max[di]     ?? null,
+    windDir:   d.wind_dir?.[di]         ?? 315,
+  };
+}
+
+// Score a spot for a given date and time window using forecast hourly data
+// Returns {score, color, label, emoji, note}
+function scoreWindow(spotKey, dateObj, windowKey){
+  const spot = SPOTS[spotKey];
+  if(!spot) return {score:'unknown', color:'#444', label:'–', emoji:'–'};
+  const win = TIME_WINDOWS.find(w=>w.key===windowKey);
+  if(!win) return {score:'unknown', color:'#444', label:'–', emoji:'–'};
+
+  // Check if we have forecast data for this date
+  const dateStr = dateObj.toISOString().slice(0,10);
+  const hasHourly = S.forecastData?.hourly?.time?.length > 0;
+  const hasDailyForDate = S.forecastData?.daily?.time?.includes(dateStr);
+
+  if(!hasHourly && !hasDailyForDate) return {score:'unknown', color:'#444', label:'No data', emoji:'–'};
+
+  // Collect hourly readings for this window on this date
+  let readings = [];
+  if(hasHourly){
+    win.hours.forEach(hr => {
+      // Handle overnight spanning midnight
+      let targetDate = dateStr;
+      if(windowKey==='overnight' && hr <= 4){
+        // these hours are on the next calendar day
+        const nd = new Date(dateObj.getTime()+86400000);
+        targetDate = nd.toISOString().slice(0,10);
+      }
+      const targetStr = targetDate + 'T' + String(hr).padStart(2,'0');
+      const idx = S.forecastData.hourly.time.findIndex(t=>t.startsWith(targetStr));
+      if(idx>=0){
+        readings.push({
+          waveHt: S.forecastData.hourly.wave_height[idx],
+          wavePeriod: S.forecastData.hourly.wave_period[idx],
+          waveDir: S.forecastData.hourly.wave_direction[idx]||300,
+          windSpd: S.forecastData.hourly.wind_speed[idx],
+          windDir: S.forecastData.hourly.wind_direction[idx]||315,
+        });
+      }
+    });
+  }
+
+  // Fallback to daily data if no hourly readings found
+  if(readings.length===0){
+    const di = S.forecastData?.daily?.time?.findIndex(t=>t===dateStr)??-1;
+    if(di>=0){
+      const wh = S.forecastData.daily.wave_height_max[di];
+      const ws = S.forecastData.daily.wind_speed_max[di];
+      const wp = S.forecastData.daily.wave_period_max?.[di];
+      if(wh!=null) readings.push({waveHt:wh,wavePeriod:wp||8,waveDir:300,windSpd:ws||0,windDir:315});
+    }
+  }
+
+  // Also use buoy data as fallback for today
+  if(readings.length===0){
+    const b = spotBuoy(spotKey);
+    if(b) readings.push({waveHt:b.waveHt,wavePeriod:b.wavePeriod,waveDir:b.waveDir||300,windSpd:b.windSpd,windDir:b.windDir||315});
+  }
+
+  if(readings.length===0) return {score:'unknown', color:'#444', label:'No data', emoji:'–'};
+
+  const boat = BOATS[S.boat]||BOATS.medium;
+  // Use representative hour for thermal wind multiplier
+  const repHour = win.hours[Math.floor(win.hours.length/2)];
+  // Lightweight raw safety gate — catches truly extreme raw values only (no thermal mult)
+  if(readings.length > 0){
+    const rawMaxWind = readings.reduce((m,r)=>Math.max(m,r.windSpd||0), 0);
+    const rawMaxWave = readings.reduce((m,r)=>Math.max(m,(r.waveHt||0)*3.281), 0);
+    if(rawMaxWind >= boat.nogoWind && rawMaxWave >= boat.nogoWave){
+      // Only no-go if BOTH wave AND wind exceed limits simultaneously (raw data)
+      return {score:'nogo',color:'#7a1f1f',label:'No-Go',emoji:'⛔',
+        note:'Extreme conditions: '+rawMaxWave.toFixed(1)+'ft / '+rawMaxWind.toFixed(0)+'kt raw'};
+    }
+  }
+  // Debug trace (visible in browser console)
+  if(readings.length>0) console.debug('[scoreWindow]',spotKey,windowKey,dateObj.toISOString().slice(0,10),
+    'readings:',readings.length,'avgWave:',(readings.reduce((s,r)=>s+(r.waveHt||0),0)/readings.length).toFixed(2)+'m',
+    'avgWind:',(readings.reduce((s,r)=>s+(r.windSpd||0),0)/readings.length).toFixed(1)+'kt');
+
+  // with proper thermal multiplier applied once via repHour
+
+  // Average the readings for overall window score
+  const avg = {
+    waveHt: readings.reduce((s,r)=>s+(r.waveHt||0),0)/readings.length,
+    wavePeriod: readings.reduce((s,r)=>s+(r.wavePeriod||8),0)/readings.length,
+    waveDir: readings[Math.floor(readings.length/2)].waveDir,
+    windSpd: readings.reduce((s,r)=>s+(r.windSpd||0),0)/readings.length,
+    windDir: readings[Math.floor(readings.length/2)].windDir,
+  };
+
+  const result = scoreConditions(avg, spot.lat, spot.lng, null, repHour);
+  // Ensure label is always populated
+  if(!result.label) result.label = {smooth:'Smooth',bumpy:'Bumpy',rough:'Rough',nogo:'No-Go',unknown:'–'}[result.score]||'–';
+  if(!result.color) result.color = scoreToColor(result.score);
+  return result;
+}
+
+// Score all 4 windows for a spot on a date
+// Returns array of 4 results in TIME_WINDOWS order
+function scoreAllWindows(spotKey, dateObj){
+  return TIME_WINDOWS.map(w => ({...scoreWindow(spotKey, dateObj, w.key), windowKey:w.key, label:w.label}));
+}
+
+// Check if a date is beyond our forecast data horizon
+function beyondForecast(dateObj){
+  if(!S.forecastData?.daily?.time?.length) return false;
+  const lastDay = S.forecastData.daily.time[S.forecastData.daily.time.length-1];
+  return dateObj.toISOString().slice(0,10) > lastDay;
+}
+
+// ═══════════════════════════════════════════════════════════
+// CUSTOM SPOTS — user-defined, persisted in localStorage
+// Merged into SPOTS at runtime so they work everywhere
+// ═══════════════════════════════════════════════════════════
+
+function loadCustomSpots(){
+  try{ return JSON.parse(localStorage.getItem('socal_fish_custom_spots')||'[]'); }
+  catch(e){ return []; }
+}
+
+function saveCustomSpots(spots){
+  localStorage.setItem('socal_fish_custom_spots', JSON.stringify(spots));
+}
+
+function mergeCustomSpots(){
+  // Remove any previously merged custom spots
+  Object.keys(SPOTS).forEach(k=>{ if(SPOTS[k]._custom) delete SPOTS[k]; });
+  // Re-merge from storage
+  loadCustomSpots().forEach(s=>{
+    const port = PORTS[S.port||'CIH'];
+    const dist = Math.round(distNm(port.lat, port.lng, s.lat, s.lng));
+    SPOTS[s.key] = {
+      name: s.name, sub: s.sub||'', lat: s.lat, lng: s.lng,
+      icon: '📌', buoys: port.buoys,
+      nearIsland: null, islandSide: null,
+      depthType: s.depthType||'custom',
+      waypoints: [[
+        (port.lat + s.lat)/2,
+        (port.lng + s.lng)/2
+      ]],
+      distances: {CIH:dist,VEN:dist,SB:dist,MLR:dist,KH:dist,PH:dist},
+      mpa: false, naval: false, _custom: true,
+    };
+  });
+}
+
+function addCustomSpot(name, lat, lng, depthType){
+  const key = 'custom_' + Date.now();
+  const spots = loadCustomSpots();
+  spots.push({key, name, sub:'', lat:parseFloat(lat), lng:parseFloat(lng), depthType});
+  saveCustomSpots(spots);
+  mergeCustomSpots();
+  return key;
+}
+
+function deleteCustomSpot(key){
+  const spots = loadCustomSpots().filter(s=>s.key!==key);
+  saveCustomSpots(spots);
+  // Remove from dashboard destinations if present
+  S.destinations = S.destinations.filter(k=>k!==key);
+  saveSettings();
+  mergeCustomSpots();
+}
+
+function exportCustomSpots(){
+  const spots = loadCustomSpots();
+  if(!spots.length){ alert('No custom spots to export.'); return; }
+  const lines = spots.map(s=>
+    '  '+s.key+": {name:'"+s.name+"',sub:'',lat:"+s.lat+",lng:"+s.lng+
+    ",icon:'📌',buoys:['46054'],nearIsland:null,islandSide:null,"+
+    "depthType:'"+s.depthType+"',waypoints:[],distances:{CIH:0},mpa:false,naval:false},"
+  );
+  const out = '// Custom spots export — '+new Date().toISOString().slice(0,10)+'\n'+
+    '// Paste into SPOTS config to hard-code:\n'+lines.join('\n');
+  const blob = new Blob([out], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='custom-spots-'+new Date().toISOString().slice(0,10)+'.txt';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+const DASH_SPOTS = [
+  // Channel Islands
+  'anacapa_lee','anacapa_wind','santa_cruz_lee','santa_cruz_wind','santa_rosa',
+  // Offshore Islands
+  'san_nicolas','san_clemente','catalina_isthmus','catalina_back',
+  // Offshore Banks
+  'tanner','fathom43','spot277','osborn_bank','kidney_63','patton_ridge',
+  'sverdrup','cortes_bank','cherry_banks','hancock_bank','spot499',
+  'potato_bank','mile14_bank',
+  // Nearshore
+  'local_kelp','ventura_flats','hueneme_canyon',
+  // Santa Barbara Island
+  'sbi_cave_canyon','sbi_landing_cove','sbi_arch_reef','sbi_three_sisters','sbi_sutil',
+  // San Nicolas
+  'sni_blockhouse','sni_east_squid','sni_daytona','sni_dutch',
+  // Catalina
+  'cat_eagle_rock','cat_iron_bound','cat_whale_rock','cat_lobster_bay',
+  'cat_cat_harbor','cat_farnsworth','cat_little_harbor','cat_ben_weston',
+  'cat_parsons','cat_arrow_point','cat_bird_rock','cat_long_point',
+  'cat_hen_rock','cat_toyon_bay','cat_jewfish_pt','cat_slide','cat_west_humps1',
+  // San Clemente
+  'sci_white_rock','sci_pyramid_head','sci_pyramid_reef','sci_pyramid_cove',
+  'sci_eel_point','sci_seal_cove','sci_mail_point','sci_china_point',
+  'sci_caves','sci_29_fathom','sci_desperation',
+  'sci_9_fathom','sci_castle_rock','sci_nw_harbor','sci_west_cove','sci_dunes',
+  'sci_lost_point',
+];
+
+const SPECIES = {
+  BFT:      {name:'Bluefin Tuna',   icon:'🐟',sstMin:62,sstMax:78,peakMonths:[5,6,7,8,9,10]},
+  YFT:      {name:'Yellowfin Tuna', icon:'🐠',sstMin:68,sstMax:82,peakMonths:[6,7,8,9,10]},
+  YT:       {name:'Yellowtail',     icon:'🐡',sstMin:59,sstMax:75,peakMonths:[4,5,6,7,8,9,10,11]},
+  WSB:      {name:'White Seabass',  icon:'🐟',sstMin:57,sstMax:72,peakMonths:[3,4,5,6,7,8]},
+  Dorado:   {name:'Dorado',         icon:'🐠',sstMin:68,sstMax:82,peakMonths:[6,7,8,9,10]},
+  Halibut:  {name:'Halibut',        icon:'🐋',sstMin:54,sstMax:68,peakMonths:[3,4,5,6,7,8,9]},
+  Rockfish: {name:'Rockfish/Ling',  icon:'🪸',sstMin:48,sstMax:68,peakMonths:[1,2,3,4,5,6,7,8,9,10,11,12]},
+  Calico:   {name:'Calico Bass',    icon:'🐟',sstMin:57,sstMax:74,peakMonths:[4,5,6,7,8,9,10]},
+  OW:       {name:'Ocean Whitefish',icon:'🐟',sstMin:58,sstMax:74,peakMonths:[1,2,3,4,5,6,7,8,9,10,11,12]},
+  Barracuda:{name:'Barracuda',      icon:'⚡',sstMin:60,sstMax:76,peakMonths:[4,5,6,7,8,9,10]},
+  Lingcod:  {name:'Lingcod',        icon:'🦎',sstMin:48,sstMax:65,peakMonths:[1,2,3,4,5,10,11,12]},
+};
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+let S = {
+  port:'CIH',
+  boat:'medium',
+  destinations:['anacapa_lee','santa_cruz_lee','local_kelp','fathom43','ventura_flats'],
+  targetSpecies:['YT','WSB','Calico','Halibut','Rockfish'],
+  notes:{},
+  buoyData:{}, currentConditions:null, tideData:null, forecastData:null, precipData:null,
+  loaded:false,
+  dashDate:new Date(),  // date shown on dashboard
+  mapMode:'conditions',
+  sliderStep:0,
+  tripResult:null,
+};
+
+// ═══════════════════════════════════════════════════════════
+// PERSIST
+// ═══════════════════════════════════════════════════════════
+function loadSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem('socal_fish_v3')||'{}');
+    if(s.port) S.port=s.port;
+    if(s.destinations) S.destinations=s.destinations;
+    if(s.targetSpecies) S.targetSpecies=s.targetSpecies;
+    if(s.notes) S.notes=s.notes;
+    if(s.boat) S.boat=s.boat;
+  }catch(e){}
+}
+function saveSettings(){
+  S.port=document.getElementById('portSelect').value;
+  S.boat=document.getElementById('boatSelect').value;
+  localStorage.setItem('socal_fish_v3',JSON.stringify({port:S.port,boat:S.boat,destinations:S.destinations,targetSpecies:S.targetSpecies,notes:S.notes}));
+  document.getElementById('portLabel').textContent=PORTS[S.port].name;
+}
+
+// ═══════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.getElementById('nav-'+name).classList.add('active');
+  // Map page needs special height treatment
+  if(name==='map'){
+    setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},100);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// DATE NAVIGATION
+// ═══════════════════════════════════════════════════════════
+function shiftDate(delta){
+  S.dashDate=new Date(S.dashDate.getTime()+delta*86400000);
+  updateDateLabel();
+  renderDashboard(); // always re-render so bars go grey beyond forecast
+}
+function updateDateLabel(){
+  const now=new Date();
+  const diff=Math.round((S.dashDate.setHours(12,0,0,0)-now.setHours(12,0,0,0))/86400000);
+  const d=new Date(S.dashDate);
+  document.getElementById('dateLabel').textContent=
+    diff===0?'TODAY':diff===1?'TOMORROW':diff===-1?'YESTERDAY':
+    d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
+}
+
+// ═══════════════════════════════════════════════════════════
+// DATA FETCHING
+// ═══════════════════════════════════════════════════════════
+// NDBC buoy fetching removed — using Open-Meteo forecast exclusively
+async function fetchTides(){
+  try{
+    const port=PORTS[S.port];
+    const d=new Date(),d3=new Date(d);d3.setDate(d.getDate()+5);
+    const fmt=x=>x.getFullYear()+String(x.getMonth()+1).padStart(2,'0')+String(x.getDate()).padStart(2,'0');
+    const r=await fetch(`https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=${fmt(d)}&end_date=${fmt(d3)}&station=${port.tideStation}&product=predictions&datum=MLLW&time_zone=lst_ldt&interval=hilo&units=english&application=socal_fish&format=json`);
+    const data=await r.json();
+    return data.predictions||null;
+  }catch(e){return null;}
+}
+async function fetchForecast(){
+  try{
+    const p=PORTS[S.port];
+    const[mr,wr]=await Promise.all([
+      fetch('https://marine-api.open-meteo.com/v1/marine?latitude='+p.lat+'&longitude='+p.lng+'&current=wave_height,wave_period,wave_direction&hourly=wave_height,wave_period,wave_direction&daily=wave_height_max,wave_period_max&timezone=America%2FLos_Angeles&forecast_days=5'),
+      fetch('https://api.open-meteo.com/v1/forecast?latitude='+p.lat+'&longitude='+p.lng+'&current=windspeed_10m,winddirection_10m&hourly=windspeed_10m,winddirection_10m&daily=windspeed_10m_max,winddirection_10m_dominant&wind_speed_unit=kn&timezone=America%2FLos_Angeles&forecast_days=5')
+    ]);
+    const marine=await mr.json(), wind=await wr.json();
+    // Store current conditions for the conditions strip (display only — not used for scoring)
+    const mc=marine.current, wc=wind.current;
+    if(mc&&wc){
+      S.currentConditions={
+        waveHt:   mc.wave_height,
+        wavePeriod:mc.wave_period,
+        waveDir:  mc.wave_direction,
+        windSpd:  wc.windspeed_10m,
+        windDir:  wc.winddirection_10m,
+      };
+    }
+    return{
+      hourly:{
+        time:      marine.hourly?.time||[],
+        wave_height:marine.hourly?.wave_height||[],
+        wave_period:marine.hourly?.wave_period||[],
+        wave_direction:marine.hourly?.wave_direction||[],
+        wind_speed:wind.hourly?.windspeed_10m||[],
+        wind_direction:wind.hourly?.winddirection_10m||[],
+      },
+      daily:{
+        time:           marine.daily?.time||[],
+        wave_height_max:marine.daily?.wave_height_max||[],
+        wave_period_max:marine.daily?.wave_period_max||[],
+        wind_speed_max: wind.daily?.windspeed_10m_max||[],
+        wind_dir:       wind.daily?.winddirection_10m_dominant||[],
+      }
+    };
+  }catch(e){return null;}
+}
+async function fetchPrecip(){
+  try{
+    const p=PORTS[S.port];
+    const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.lat}&longitude=${p.lng}&daily=precipitation_sum&past_days=7&forecast_days=1&timezone=America%2FLos_Angeles`);
+    const d=await r.json();return d.daily||null;
+  }catch(e){return null;}
+}
+
+async function refreshData(){
+  const btn=document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  const log=m=>{console.log('[SoCal Fish]',m);};
+
+  document.getElementById('destList').innerHTML=`<div class="loading"><div class="wave"><span></span><span></span><span></span></div>Fetching conditions...</div>`;
+
+  try{
+    // Fetch forecast + tides in parallel (no buoy fetching — using forecast data exclusively)
+    const[tides,forecast,precip]=await Promise.all([fetchTides(),fetchForecast(),fetchPrecip()]);
+    log(tides?'✅ Tides: '+tides.length+' events':'❌ Tides: failed');
+    log(forecast?.hourly?.time?.length?'✅ Forecast: '+forecast.hourly.time.length+' hourly steps':'❌ Forecast: failed');
+    log(precip?'✅ Precip: ok':'❌ Precip: failed');
+    S.buoyData={}; // kept for compatibility but unused for scoring
+
+    S.tideData=tides;S.forecastData=forecast;S.precipData=precip;S.loaded=true;
+    S.dashDate=new Date();
+    updateDateLabel();
+    try{renderDashboard();}catch(e){
+      console.error('renderDashboard error:',e);
+      document.getElementById('destList').innerHTML='<div style="padding:20px;color:#e88;font-size:12px;font-family:monospace">⚠ Render error: '+e.message+'<br>Check browser console for details.</div>';
+    }
+    try{renderForecast();}catch(e){console.error('renderForecast error:',e);}
+    initSlider();
+    if(leafletMap)updateMapColors();
+    document.getElementById('lastUpd').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  }catch(e){
+    log('EXCEPTION: '+e.message);
+  }
+  btn.classList.remove('spinning');
+}
+
+// ═══════════════════════════════════════════════════════════
+// CORE SEA STATE ENGINE
+// ═══════════════════════════════════════════════════════════
+
+// Angular difference between two bearings (0-180)
+function angleDiff(a,b){
+  let d=Math.abs((a-b+360)%360);
+  return d>180?360-d:d;
+}
+
+// Nm between two lat/lng points
+function distNm(lat1,lng1,lat2,lng2){
+  const R=3440.065;
+  const dLat=(lat2-lat1)*Math.PI/180;
+  const dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// Bearing from point A to point B
+function bearing(lat1,lng1,lat2,lng2){
+  const dLng=(lng2-lng1)*Math.PI/180;
+  const y=Math.sin(dLng)*Math.cos(lat2*Math.PI/180);
+  const x=Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180)-Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dLng);
+  return(Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+
+// Island shadow shelter factor (0=no shelter, 1=full shelter)
+// Returns a reduction factor applied to effective wave height
+function islandShelterFactor(spotLat,spotLng,swellDir,windDir){
+  let maxShelter=0;
+  for(const[key,isl]of Object.entries(ISLANDS)){
+    // Vector from island center to spot
+    const dLat=spotLat-isl.lat, dLng=spotLng-isl.lng;
+    const spotBearingFromIsland=bearing(isl.lat,isl.lng,spotLat,spotLng);
+    const distFromIsland=distNm(isl.lat,isl.lng,spotLat,spotLng);
+    // Is the spot downwind/down-swell of the island?
+    // Swell direction is WHERE swell comes FROM, so lee is opposite direction
+    const swellComingFrom=swellDir; // 315 = NW swell coming from NW
+    const leeBearing=(swellComingFrom+180)%360; // lee side is downwind
+    const angleToLee=angleDiff(spotBearingFromIsland,leeBearing);
+    if(angleToLee>70) continue; // spot is not in shadow cone
+    // Shelter scales with island size and diminishes with distance
+    const islandBlockingWidth=isl.lenNm*Math.cos((isl.axis-swellComingFrom)*Math.PI/180);
+    const shadowRadius=Math.max(isl.lenNm,isl.widNm)*2.5;
+    if(distFromIsland>shadowRadius) continue;
+    const distFactor=1-distFromIsland/shadowRadius;
+    const angleFactor=1-angleToLee/70;
+    const shelter=distFactor*angleFactor*0.65; // max 65% reduction
+    maxShelter=Math.max(maxShelter,shelter);
+  }
+  return maxShelter;
+}
+
+// Thermal wind multiplier by time of day and season
+function thermalMult(hour){
+  const month=new Date().getMonth()+1;
+  const summer=month>=5&&month<=10;
+  if(hour>=5&&hour<11)  return summer?0.9:0.85;
+  if(hour>=11&&hour<17) return summer?1.55:1.2;
+  if(hour>=17&&hour<21) return summer?1.25:1.05;
+  return summer?0.8:0.85; // overnight
+}
+
+// Get current conditions for a spot — uses forecast hourly for current hour
+// Buoy data no longer used for scoring; this provides display-only current snapshot
+function spotBuoy(spotKey){
+  // Try forecast current hour first
+  const now = new Date();
+  const cond = getForecastConditions(now, now.getHours());
+  if(cond && cond.waveHt !== null) return cond;
+  // Fallback to Open-Meteo current snapshot
+  if(S.currentConditions) return S.currentConditions;
+  return null;
+}
+
+// Get forecast for a specific UTC hour index (for hourly data)
+function getForecastAtStep(step){
+  if(!S.forecastData?.hourly?.time||step<0)return null;
+  const idx=Math.min(step,S.forecastData.hourly.time.length-1);
+  const h=S.forecastData.hourly;
+  return{waveHt:h.wave_height[idx]??null,wavePeriod:h.wave_period[idx]??8,
+    waveDir:h.wave_direction[idx]??300,windSpd:h.wind_speed[idx]??null,windDir:h.wind_direction[idx]??315};
+}
+
+// Core scoring function
+// conditions: {waveHt (m), wavePeriod (s), waveDir (deg), windSpd (kts), windDir (deg)}
+// spotLat/Lng: for island shelter calculation
+// runBearing: null = at-location, number = transit bearing (degrees)
+// hour: for thermal wind adjustment
+function scoreConditions(cond,spotLat,spotLng,runBearing,hour){
+  if(!cond||cond.waveHt===null||cond.waveHt===undefined)
+    return{score:'unknown',label:'No Data',emoji:'❓',color:'#555',note:'No buoy data available'};
+
+  let waveHtFt=cond.waveHt*3.281;
+  const period=cond.wavePeriod||8;
+  let windKts=cond.windSpd||0;
+  const waveDir=cond.waveDir||300;
+  const windDir=cond.windDir||315;
+
+  // Apply thermal wind multiplier if hour is provided
+  if(hour!==undefined&&hour!==null){
+    windKts*=thermalMult(hour);
+  }
+
+  // Island shelter — reduces effective wave height
+  const shelter=islandShelterFactor(spotLat,spotLng,waveDir,windDir);
+  waveHtFt*=(1-shelter);
+
+  // If we have a run bearing, apply opposition penalty
+  // Head-on into swell/wind is worse than running with it
+  let oppPenalty=1.0;
+  if(runBearing!==null&&runBearing!==undefined){
+    const swellOpp=angleDiff(runBearing,waveDir);       // 180 = head-on into swell
+    const windOpp=angleDiff(runBearing,(windDir+180)%360); // wind direction is TO, swell is FROM
+    // Head-on (180°) = 1.4x multiplier, beam (90°) = 1.0x, following (0°) = 0.75x
+    const swellMult=0.75+(swellOpp/180)*0.65;
+    const windMult=0.75+(windOpp/180)*0.5;
+    oppPenalty=(swellMult*0.65+windMult*0.35); // swell weighted more than wind
+    waveHtFt*=oppPenalty;
+    windKts*=(0.8+(windOpp/180)*0.4);
+  }
+
+  // Wave steepness penalty
+  const steepness=waveHtFt/Math.max(period,1);
+  if(steepness>0.7) waveHtFt*=1.15;
+
+  // Combined seas (proper vector addition)
+  const windWave=(windKts>10?Math.pow((windKts-10)*0.04,2)*1.2:0);
+  const combinedFt=Math.sqrt(waveHtFt**2+windWave**2);
+
+  // Boat thresholds
+  const boat=BOATS[S.boat]||BOATS.medium;
+  if(windKts>=boat.nogoWind)return{score:'nogo',label:'No-Go',emoji:'⛔',color:'#7a1f1f',note:`Wind ${windKts.toFixed(0)} kts — exceeds limit for ${boat.label}`};
+  if(combinedFt>=boat.nogoWave)return{score:'nogo',label:'No-Go',emoji:'⛔',color:'#7a1f1f',note:`Combined seas ${combinedFt.toFixed(1)} ft — exceeds limit for ${boat.label}`};
+
+  let score,label,emoji,color;
+  if(combinedFt<=boat.bumpyWave&&windKts<boat.bumpyWind&&steepness<0.4){score='smooth';label='Smooth';emoji='🟢';color='#25a85e';}
+  else if(combinedFt<=boat.roughWave&&windKts<boat.roughWind){score='bumpy';label='Bumpy';emoji='🟡';color='#e8a020';}
+  else if(combinedFt<boat.nogoWave){score='rough';label='Rough';emoji='🔴';color='#c0392b';}
+  else{score='nogo';label='No-Go';emoji='⛔';color='#7a1f1f';} // note: no semicolon issue here
+
+  const shelterNote=shelter>0.3?' (island shelter -'+(shelter*100).toFixed(0)+'%)':'';
+  const note=waveHtFt.toFixed(1)+'ft @ '+period.toFixed(0)+'s · '+windKts.toFixed(0)+'kt wind'+shelterNote;
+
+  return{score:score||'unknown',label:label||'–',emoji:emoji||'–',color:color||'#444',note,combinedFt,windKts,waveHtFt};
+}
+
+// Get tidal current direction and speed estimate at a given hour
+function tidalCurrentAt(hour){
+  if(!S.tideData)return{dir:null,speed:0};
+  const now=new Date();
+  const targetTime=new Date(now);
+  targetTime.setHours(hour,0,0,0);
+  // Find surrounding hi/lo
+  let prev=null,next=null;
+  for(const t of S.tideData){
+    const td=new Date(t.t);
+    if(td<=targetTime)prev=t;
+    else if(!next)next=t;
+  }
+  if(!prev||!next)return{dir:null,speed:0};
+  const range=Math.abs(parseFloat(next.v)-parseFloat(prev.v));
+  const flooding=parseFloat(next.v)>parseFloat(prev.v);
+  // Channel floods E (090°) ebbs W (270°) roughly
+  return{dir:flooding?90:270,speed:range*0.3}; // rough knot estimate
+}
+
+// ═══════════════════════════════════════════════════════════
+// TRIP PLANNING ENGINE
+// ═══════════════════════════════════════════════════════════
+
+// Speed in kts given sea state score
+function speedFromScore(score){
+  if(score==='smooth')return 28;
+  if(score==='bumpy')return 20;
+  if(score==='rough')return 10;
+  return 0; // nogo
+}
+
+// Score a single transit leg
+// fromLat/Lng → toLat/Lng at a given Date
+function scoreLeg(fromLat,fromLng,toLat,toLng,startTime){
+  const hr=startTime.getHours();
+  const runBrg=bearing(fromLat,fromLng,toLat,toLng);
+  const dist=distNm(fromLat,fromLng,toLat,toLng);
+
+  // ── Use canonical lookup — same data source as forecast tab ──
+  let cond = getForecastConditions(startTime, startTime.getHours());
+  // Fallback to adjacent hour if exact hour not found
+  if(!cond || cond.waveHt === null){
+    for(const offset of [1,-1,2,-2,3,-3]){
+      cond = getForecastConditions(startTime, startTime.getHours()+offset);
+      if(cond && cond.waveHt !== null) break;
+    }
+  }
+  // Final fallback: current buoy snapshot
+  if(!cond || cond.waveHt === null){
+    const b=S.buoyData[PORTS[S.port].buoys[0]]||S.buoyData['_current'];
+    if(b) cond={waveHt:b.waveHt,wavePeriod:b.wavePeriod,waveDir:b.waveDir||300,windSpd:b.windSpd,windDir:b.windDir||315};
+  }
+
+  const midLat=(fromLat+toLat)/2, midLng=(fromLng+toLng)/2;
+  const result=scoreConditions(cond,midLat,midLng,runBrg,hr);
+  const speed=speedFromScore(result.score);
+  const durationHr=speed>0?dist/speed:null;
+  return{...result,dist,durationHr,runBrg,fromLat,fromLng,toLat,toLng,startTime};
+}
+
+// Full trip plan: port → wp1 → wp2 → dest → (anchor?) → wp2 → wp1 → port
+function planTrip(spotKey,departDate,departTimeStr,returnDate,returnTimeStr){
+  const spot=SPOTS[spotKey];
+  const port=PORTS[S.port];
+  if(!spot)return null;
+
+  const [dH,dM]=departTimeStr.split(':').map(Number);
+  const [rH,rM]=returnTimeStr.split(':').map(Number);
+  const departDT=new Date(departDate);departDT.setHours(dH,dM,0,0);
+  const returnDT=new Date(returnDate);returnDT.setHours(rH,rM,0,0);
+  const overnight=returnDT.getDate()!==departDT.getDate();
+
+  const wps=spot.waypoints||[];
+  const wp1=wps[0]||[spot.lat,spot.lng];
+  const wp2=wps[1]||[spot.lat,spot.lng];
+
+  // OUTBOUND LEGS
+  let t=new Date(departDT);
+  const leg_out1=scoreLeg(port.lat,port.lng,wp1[0],wp1[1],t);
+  if(leg_out1.durationHr)t=new Date(t.getTime()+leg_out1.durationHr*3600000);
+  const leg_out2=scoreLeg(wp1[0],wp1[1],wp2[0],wp2[1],t);
+  if(leg_out2.durationHr)t=new Date(t.getTime()+leg_out2.durationHr*3600000);
+  const leg_out3=scoreLeg(wp2[0],wp2[1],spot.lat,spot.lng,t);
+  if(leg_out3.durationHr)t=new Date(t.getTime()+leg_out3.durationHr*3600000);
+
+  const arrivalTime=new Date(t);
+  const outDurHr=leg_out1.durationHr+leg_out2.durationHr+leg_out3.durationHr;
+
+  // ON LOCATION — use same canonical lookup as forecast tab
+  let cond = getForecastConditions(t, t.getHours());
+  if(!cond||cond.waveHt===null){
+    for(const offset of [1,-1,2,-2]){
+      cond=getForecastConditions(t,t.getHours()+offset);
+      if(cond&&cond.waveHt!==null)break;
+    }
+  }
+  if(!cond||cond.waveHt===null){
+    const b=spotBuoy(spotKey);
+    if(b)cond={waveHt:b.waveHt,wavePeriod:b.wavePeriod,waveDir:b.waveDir||300,windSpd:b.windSpd,windDir:b.windDir||315};
+  }
+  const onLocation=scoreConditions(cond,spot.lat,spot.lng,null,t.getHours());
+
+  // RETURN LEGS
+  const returnStart=new Date(returnDT);
+  let rt=new Date(returnStart);
+  const leg_ret1=scoreLeg(spot.lat,spot.lng,wp2[0],wp2[1],rt);
+  if(leg_ret1.durationHr)rt=new Date(rt.getTime()+leg_ret1.durationHr*3600000);
+  const leg_ret2=scoreLeg(wp2[0],wp2[1],wp1[0],wp1[1],rt);
+  if(leg_ret2.durationHr)rt=new Date(rt.getTime()+leg_ret2.durationHr*3600000);
+  const leg_ret3=scoreLeg(wp1[0],wp1[1],port.lat,port.lng,rt);
+  if(leg_ret3.durationHr)rt=new Date(rt.getTime()+leg_ret3.durationHr*3600000);
+
+  const homeTime=new Date(rt);
+  const retDurHr=(leg_ret1.durationHr||0)+(leg_ret2.durationHr||0)+(leg_ret3.durationHr||0);
+
+  // Overall trip score = worst of all legs (return weighted most)
+  // If return is nogo, whole trip is nogo regardless
+  const scorePriority=['nogo','rough','bumpy','smooth','unknown'];
+  const returnScores=[leg_ret1,leg_ret2,leg_ret3].map(l=>l.score);
+  const returnWorst=scorePriority.find(s=>returnScores.includes(s))||'unknown';
+  const allScores=[leg_out1,leg_out2,leg_out3,onLocation,leg_ret1,leg_ret2,leg_ret3].map(l=>l.score);
+  let worstScore=scorePriority.find(s=>allScores.includes(s))||'unknown';
+  // Return leg gets extra weight: if return is rough and everything else bumpy, show rough
+  if(returnWorst==='nogo') worstScore='nogo';
+  else if(returnWorst==='rough'&&worstScore==='bumpy') worstScore='rough';
+
+  // Anchorage recommendation (for overnight)
+  let anchorage=null;
+  if(overnight){
+    anchorage=recommendAnchorage(cond?.waveDir||300,spot.lat,spot.lng);
+  }
+
+  return{
+    spot,spotKey,overnight,
+    outbound:[leg_out1,leg_out2,leg_out3],
+    onLocation,
+    return:[leg_ret1,leg_ret2,leg_ret3],
+    worstScore,
+    arrivalTime,homeTime,
+    outDurHr,retDurHr,
+    anchorage,
+    departDT,returnStart,
+  };
+}
+
+// Dashboard preset trips
+function planPreset(spotKey,dateObj){
+  const spot=SPOTS[spotKey];
+  if(!spot)return{halfDay:null,fullDay:null,overnight:null};
+  const dateStr=dateObj.toISOString().slice(0,10);
+  const nextDayStr=new Date(dateObj.getTime()+86400000).toISOString().slice(0,10);
+  const dist=spot.distances[S.port]||30;
+  // Half day: depart 6am, return by 2pm same day
+  const halfDay=planTrip(spotKey,dateStr,'06:00',dateStr,'13:00');
+  // Full day: depart 6am, return at dusk (~7pm)
+  const fullDay=planTrip(spotKey,dateStr,'06:00',dateStr,'18:00');
+  // Overnight: depart 6am, return next day by 1pm
+  const overnight=planTrip(spotKey,dateStr,'06:00',nextDayStr,'08:00');
+  return{halfDay,fullDay,overnight};
+}
+
+// ═══════════════════════════════════════════════════════════
+// ANCHORAGE RECOMMENDATION
+// ═══════════════════════════════════════════════════════════
+function recommendAnchorage(swellDir,nearLat,nearLng){
+  let best=null,bestScore=-Infinity;
+  for(const anch of ANCHORAGES){
+    // Does this anchorage shelter from this swell direction?
+    const[minSwell,maxSwell]=anch.bestSwellFrom;
+    const sheltered=(swellDir>=minSwell&&swellDir<=maxSwell)||
+      (minSwell>maxSwell&&(swellDir>=minSwell||swellDir<=maxSwell));
+    const sheltScore=sheltered?2:0;
+    // Proximity to current spot
+    const d=distNm(nearLat,nearLng,anch.lat,anch.lng);
+    const proxScore=1/(d+1)*30;
+    const total=sheltScore*20+proxScore;
+    if(total>bestScore){bestScore=total;best=anch;}
+  }
+  return best;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER — DASHBOARD
+// ═══════════════════════════════════════════════════════════
+function renderDashboard(){
+  // Conditions strip uses forecast current hour — same data source as all scoring
+  const now=new Date();
+  const cc=getForecastConditions(now,now.getHours())||S.currentConditions||null;
+  renderCondStrip(cc, null);
+  renderSummary(cc, null);
+  // Destinations
+  renderDestList();
+}
+
+function renderCondStrip(buoy,sst){
+  // For display strip, use forecast current hour (same source as scoring)
+  const now=new Date();
+  const fc=getForecastConditions(now,now.getHours())||S.currentConditions||buoy||{};
+  const waveHtFt=fc.waveHt?(fc.waveHt*3.281).toFixed(1):'–';
+  const period=fc.wavePeriod?fc.wavePeriod.toFixed(0):'–';
+  const wind=fc.windSpd?fc.windSpd.toFixed(0):'–';
+  const windDir=fc.windDir?degToCard(fc.windDir):'–';
+  const viz=calcViz();
+  const lunar=lunarPhase();
+  let tideStr='–',tideNext='';
+  if(S.tideData){
+    const now=new Date();
+    const up=S.tideData.find(t=>new Date(t.t)>now);
+    if(up){
+      tideStr=parseFloat(up.v).toFixed(1)+' ft';
+      tideNext=(up.type==='H'?'▲':'▼')+' '+new Date(up.t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    }
+  }
+  document.getElementById('condStrip').innerHTML=`
+    <div class="cp"><div class="cp-lbl">Swell</div><div class="cp-val">${waveHtFt}<span style="font-size:10px">ft</span></div><div class="cp-sub">@ ${period}s</div></div>
+    <div class="cp"><div class="cp-lbl">Wind</div><div class="cp-val">${wind}<span style="font-size:10px">kt</span></div><div class="cp-sub">${windDir}</div></div>
+    <div class="cp"><div class="cp-lbl">Tide</div><div class="cp-val" style="font-size:12px">${tideStr}</div><div class="cp-sub">${tideNext}</div></div>
+    <div class="cp"><div class="cp-lbl">Moon</div><div class="cp-val" style="font-size:18px">${lunar.emoji}</div><div class="cp-sub" style="font-size:8px">${lunar.shortName}</div></div>
+    <div class="cp"><div class="cp-lbl">Swell Dir</div><div class="cp-val" style="font-size:12px">${buoy?.waveDir?degToCard(buoy.waveDir):'–'}</div><div class="cp-sub">${buoy?.waveDir?buoy.waveDir.toFixed(0)+'°':''}</div></div>`;
+}
+
+function renderSummary(buoy,sst){
+  const dayName=S.dashDate.toLocaleDateString('en-US',{weekday:'long'});
+  const isToday=Math.abs(S.dashDate-new Date())<86400000;
+  // For future dates, pull from forecast daily data
+  let waveHtFt='–', period='–', wind='–';
+  if(!isToday&&S.forecastData?.daily?.time){
+    const dateStr=S.dashDate.toISOString().slice(0,10);
+    const di=S.forecastData.daily.time.findIndex(t=>t===dateStr);
+    if(di>=0){
+      const wh=S.forecastData.daily.wave_height_max[di];
+      const ws=S.forecastData.daily.wind_speed_max[di];
+      if(wh)waveHtFt=(wh*3.281).toFixed(1);
+      if(ws)wind=ws.toFixed(0);
+      period=S.forecastData.daily.wave_period_max?.[di]?.toFixed(0)||'–';
+    }
+  } else if(buoy){
+    waveHtFt=(buoy.waveHt*3.281).toFixed(1);
+    period=buoy.wavePeriod?.toFixed(0)||'–';
+    wind=buoy.windSpd?.toFixed(0)||'–';
+  }
+
+  // Beyond forecast range — grey out narrative
+  if(beyondForecast(S.dashDate)){
+    document.getElementById('sumTxt').textContent=dayName+' — Beyond forecast range. Moon phase: '+lunarPhase(S.dashDate).name+'.';
+    return;
+  }
+  let txt='';
+  if(waveHtFt==='–'&&!buoy){
+    txt=dayName+' — Refresh conditions to see the outlook.';
+  } else {
+    const windN=parseFloat(wind)||0, waveN=parseFloat(waveHtFt)||0;
+    // Use scoreWindow() — same function as forecast tab — for fully consistent scoring
+    const goCount=S.destinations.filter(k=>{
+      const morn=scoreWindow(k,S.dashDate,'morning');
+      const aftn=scoreWindow(k,S.dashDate,'afternoon');
+      return morn.score==='smooth'||morn.score==='bumpy'||aftn.score==='smooth'||aftn.score==='bumpy';
+    }).length;
+
+    // Score each destination using scoreWindow for nuanced narrative
+    const destScores=S.destinations.map(k=>{
+      const spot=SPOTS[k];if(!spot)return null;
+      const morn=scoreWindow(k,S.dashDate,'morning');
+      const aftn=scoreWindow(k,S.dashDate,'afternoon');
+      // Use worst of morning/afternoon for narrative
+      const priority=['nogo','rough','bumpy','smooth','unknown'];
+      const score=priority.find(s=>s===morn.score||s===aftn.score)||'unknown';
+      return{key:k,score,near:spot.nearIsland,label:score};
+    }).filter(Boolean);
+
+    const smooth=destScores.filter(d=>d.score==='smooth');
+    const bumpy=destScores.filter(d=>d.score==='bumpy');
+    const rough=destScores.filter(d=>d.score==='rough');
+    const nogo=destScores.filter(d=>d.score==='nogo');
+    const sheltered=smooth.filter(d=>d.near);
+    const total=destScores.length;
+
+    if(windN>=18||waveN>=7||nogo.length===total){
+      txt=`${dayName} — Rough day across the board. ${waveHtFt} ft @ ${period}s, winds ${wind} kts. No-go for most destinations — local trips only if conditions allow.`;
+    } else if(smooth.length===total){
+      txt=`${dayName} — Excellent conditions. All ${total} destinations looking smooth at ${waveHtFt} ft @ ${period}s, winds ${wind} kts. Good day to run offshore.`;
+    } else if(smooth.length+bumpy.length===total&&nogo.length===0){
+      txt=`${dayName} — Good day overall. ${smooth.length} smooth, ${bumpy.length} bumpy. ${waveHtFt} ft @ ${period}s, ${wind} kts. Manageable for all destinations.`;
+    } else if(sheltered.length>=2&&(rough.length>0||nogo.length>0)){
+      const sheltNames=sheltered.slice(0,2).map(d=>SPOTS[d.key].name).join(' and ');
+      txt=`${dayName} — Mixed picture. Bumpy to rough offshore (${waveHtFt} ft @ ${period}s, ${wind} kts), but island shelter keeps ${sheltNames} fishable. Consider staying in the lee.`;
+    } else if(rough.length+nogo.length>smooth.length+bumpy.length){
+      txt=`${dayName} — Challenging. ${rough.length+nogo.length} of ${total} destinations rough or no-go. ${waveHtFt} ft @ ${period}s, ${wind} kts. Stick to nearby spots.`;
+    } else {
+      txt=`${dayName} — ${smooth.length} smooth, ${bumpy.length} bumpy, ${rough.length} rough. ${waveHtFt} ft @ ${period}s, winds ${wind} kts. Pick your destinations carefully.`;
+    }
+    txt+=' Check Fishdope before any offshore run.';
+  }
+  document.getElementById('sumTxt').textContent=txt;
+}
+
+// Render 4 stacked bars for a spot/date
+function renderCondBars(spotKey, dateObj, barWidth){
+  const beyond = beyondForecast(dateObj);
+  const w = barWidth||14;
+  if(!S.loaded) return '<div class="cond-bars" style="width:'+w+'px"><div class="cond-bar unknown"></div><div class="cond-bar unknown"></div><div class="cond-bar unknown"></div><div class="cond-bar unknown"></div></div>';
+  const windows = beyond ? TIME_WINDOWS.map(w=>({score:'unknown'})) : scoreAllWindows(spotKey, dateObj);
+  return '<div class="cond-bars" style="width:'+w+'px" title="Morn/Aftn/Eve/Night">'+
+    windows.map(w=>'<div class="cond-bar '+w.score+'"></div>').join('')+
+  '</div>';
+}
+
+// Render inline bar label for forecast expanded view
+function renderWindowDetail(spotKey, dateObj, windowKey){
+  const beyond = beyondForecast(dateObj);
+  if(beyond) return '<span style="color:#444">No data</span>';
+  const result = scoreWindow(spotKey, dateObj, windowKey);
+  const win = TIME_WINDOWS.find(w=>w.key===windowKey);
+  const labelColor = result.color||'var(--mist)';
+  const lbl = result.label||'–';
+  return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0">'
+    +'<div style="width:28px;height:6px;border-radius:2px;background:'+barBg(result.score)+';flex-shrink:0"></div>'
+    +'<span style="font-size:10px;color:var(--mist);font-family:monospace;width:28px">'+win.icon+' '+win.label+'</span>'
+    +'<span style="font-size:11px;font-weight:500;color:'+labelColor+'">'+lbl+'</span>'
+    +(result.note?'<span style="font-size:10px;color:var(--mist);margin-left:3px"> · '+result.note+'</span>':'')
+    +'</div>';
+}
+
+function scoreToClass(score){
+  return{smooth:'smooth',bumpy:'bumpy',rough:'rough',nogo:'nogo',unknown:''}[score]||'';
+}
+function scoreToColor(score){
+  return{smooth:'#25a85e',bumpy:'#e8a020',rough:'#c0392b',nogo:'#7a1f1f',unknown:'#444'}[score]||'#444';
+}
+// Returns inline CSS background value — uses stripe pattern for no-go
+function barBg(score){
+  if(score==='nogo') return 'repeating-linear-gradient(90deg,#c0392b 0px,#c0392b 3px,#1a1a1a 3px,#1a1a1a 5px)';
+  return scoreToColor(score);
+}
+function scoreToEmoji(score){
+  return{smooth:'🟢',bumpy:'🟡',rough:'🔴',nogo:'⛔',unknown:'❓'}[score]||'❓';
+}
+
+function destCondStrip(key){
+  const spot=SPOTS[key];
+  if(!spot) return '';
+  const b=spotBuoy(key);
+  if(!b) return '<div style="font-size:10px;color:var(--mist);padding:2px 0 8px">Conditions: No data — refresh</div>';
+  const rawCond={waveHt:b.waveHt,wavePeriod:b.wavePeriod,waveDir:b.waveDir||300,windSpd:b.windSpd,windDir:b.windDir||315};
+  const result=scoreConditions(rawCond,spot.lat,spot.lng,null,new Date().getHours());
+  const shelter=islandShelterFactor(spot.lat,spot.lng,b.waveDir||300,b.windDir||315);
+  const effHtFt=b.waveHt?(b.waveHt*3.281*(1-shelter)).toFixed(1):'–';
+  const period=b.wavePeriod?b.wavePeriod.toFixed(0):'–';
+  const wind=b.windSpd?b.windSpd.toFixed(0):'–';
+  const shelterTxt=shelter>0.2?' <span style="color:var(--green);font-size:9px">('+Math.round(shelter*100)+'% sheltered)</span>':'';
+  return '<div style="display:flex;gap:6px;padding:0 0 10px;flex-wrap:wrap;align-items:center">'
+    +'<div style="background:rgba(10,22,40,0.5);border-radius:7px;padding:5px 9px;text-align:center;min-width:58px">'
+    +'<div style="font-size:8px;color:var(--mist);font-family:monospace;text-transform:uppercase;letter-spacing:1px">Swell</div>'
+    +'<div style="font-size:13px;font-weight:600">'+effHtFt+'<span style="font-size:9px">ft</span></div>'
+    +'<div style="font-size:9px;color:var(--mist)">@'+period+'s</div>'
+    +'</div>'
+    +'<div style="background:rgba(10,22,40,0.5);border-radius:7px;padding:5px 9px;text-align:center;min-width:58px">'
+    +'<div style="font-size:8px;color:var(--mist);font-family:monospace;text-transform:uppercase;letter-spacing:1px">Wind</div>'
+    +'<div style="font-size:13px;font-weight:600">'+wind+'<span style="font-size:9px">kt</span></div>'
+    +'<div style="font-size:9px;color:var(--mist)">'+degToCard(b.windDir)+'</div>'
+    +'</div>'
+    +'<div style="background:'+result.color+'22;border:1px solid '+result.color+'44;border-radius:7px;padding:5px 9px;text-align:center;flex:1">'
+    +'<div style="font-size:8px;color:var(--mist);font-family:monospace;text-transform:uppercase;letter-spacing:1px">At Location</div>'
+    +'<div style="font-size:14px">'+result.emoji+' <span style="font-size:11px;font-weight:600;color:'+result.color+'">'+result.label+'</span></div>'
+    +'<div style="font-size:9px;color:var(--mist)">'+(shelterTxt||'open water')+'</div>'
+    +'</div>'
+    +'</div>';
+}
+
+
+function renderDestList(){
+  let html='';
+  S.destinations.forEach((key,idx)=>{
+    const spot=SPOTS[key];
+    if(!spot){return;}
+    const beyond=beyondForecast(S.dashDate);
+    const trips=beyond?{halfDay:null,fullDay:null,overnight:null}:planPreset(key,S.dashDate);
+    const hd=trips.halfDay;
+    const fd=trips.fullDay;
+    const ov=trips.overnight;
+    const dist=spot.distances[S.port]||'?';
+    html+=`
+    <div class="dest-card" id="dc${idx}">
+      <div class="dest-hdr" onclick="toggleDest(${idx})">
+        <div class="dest-left">
+          <div class="dest-icon">${spot.icon}</div>
+          <div>
+            <div class="dest-name">${spot.name}${spot.sub?' · '+spot.sub:''}</div>
+            <div class="dest-meta">${dist} nm from ${PORTS[S.port].name.split(' ')[0]}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px">
+          ${renderCondBars(key,S.dashDate,12)}
+          <div style="display:flex;flex-direction:column;gap:3px;align-items:center">
+            <div style="display:flex;gap:4px">
+              <div title="Half Day" style="width:10px;height:10px;border-radius:50%;background:${beyond?'#333':scoreToColor(hd?.worstScore||'unknown')}"></div>
+              <div title="Full Day" style="width:10px;height:10px;border-radius:50%;background:${beyond?'#333':scoreToColor(fd?.worstScore||'unknown')}"></div>
+              <div title="Overnight" style="width:10px;height:10px;border-radius:50%;background:${beyond?'#333':scoreToColor(ov?.worstScore||'unknown')}"></div>
+            </div>
+            <div style="display:flex;gap:4px">
+              <div style="font-size:7px;color:var(--mist);font-family:monospace;width:10px;text-align:center">½</div>
+              <div style="font-size:7px;color:var(--mist);font-family:monospace;width:10px;text-align:center">F</div>
+              <div style="font-size:7px;color:var(--mist);font-family:monospace;width:10px;text-align:center">O</div>
+            </div>
+          </div>
+          <div class="chevron">▼</div>
+        </div>
+      </div>
+      <div class="dest-detail" id="dd${idx}">
+        ${destCondStrip(key)}
+        ${renderDestDetail(key,idx,trips,spot)}
+      </div>
+    </div>`;
+  });
+  const beyond = beyondForecast(S.dashDate);
+  if(beyond){
+    // Add a notice above the list
+    html = '<div style="margin:0 14px 8px;background:rgba(255,255,255,0.04);border:1px solid var(--bdr);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--mist);font-family:monospace">Beyond forecast range — conditions unavailable. Moon phase shown.</div>' + html;
+  }
+  document.getElementById('destList').innerHTML=html||'<div style="padding:20px;color:var(--mist);text-align:center;font-size:13px">No destinations configured — check Settings</div>';
+  // Restore notes
+  S.destinations.forEach((key,idx)=>{
+    const ta=document.getElementById(`notes${idx}`);
+    if(ta&&S.notes[key]){ta.value=S.notes[key].text||'';}
+  });
+}
+
+function renderDestDetail(key,idx,trips,spot){
+  const sst=spotBuoy(key)?.sst;
+  const buoy=spotBuoy(key);
+  let html='';
+
+  // Trip type breakdown
+  const tripTypes=[
+    {label:'Half Day',icon:'⏰',trip:trips.halfDay,desc:'Depart 6am · Return by 1pm'},
+    {label:'Full Day',icon:'☀️',trip:trips.fullDay,desc:'Depart 6am · Return at dusk'},
+    {label:'Overnight',icon:'🌙',trip:trips.overnight,desc:'Depart 6am · Return next morning'},
+  ];
+
+  html+=`<div class="trip-section"><div class="trip-sec-title">Trip Assessment — ${S.dashDate.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>`;
+  html+=`<div class="leg-grid">`;
+  tripTypes.forEach(({label,icon,trip,desc})=>{
+    if(!trip){
+      html+=`<div class="leg-card unknown"><div class="leg-emoji">–</div><div class="leg-name">${label}</div><div class="leg-detail" style="color:var(--mist);font-size:9px">No data</div></div>`;
+      return;
+    }
+    const sc=trip.worstScore;
+    html+=`<div class="leg-card ${scoreToClass(sc)}" onclick="showTripDetail('${key}','${label}')">
+      <div class="leg-emoji">${scoreToEmoji(sc)}</div>
+      <div class="leg-name">${label}</div>
+      <div class="leg-detail">${desc}</div>
+    </div>`;
+  });
+  html+=`</div></div>`;
+
+  // Full day detail
+  if(trips.fullDay){
+    const fd=trips.fullDay;
+    const arrStr=fd.arrivalTime?fd.arrivalTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'?';
+    const homeStr=fd.homeTime?fd.homeTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'?';
+    html+=`<div class="narr-box">
+      <strong>Full Day:</strong> Est. arrival ${arrStr} (${fd.outDurHr?.toFixed(1)||'?'}h run) · 
+      Est. home ${homeStr} (${fd.retDurHr?.toFixed(1)||'?'}h return)<br>
+      Outbound: ${fd.outbound.map(l=>scoreToEmoji(l.score)).join(' → ')} &nbsp;|&nbsp; 
+      Return: ${fd.return.map(l=>scoreToEmoji(l.score)).join(' → ')}
+      ${fd.onLocation?`<br>On location: ${scoreToEmoji(fd.onLocation.score)} ${fd.onLocation.note}`:''}
+    </div>`;
+    if(fd.anchorage){
+      html+=`<div style="background:rgba(155,89,182,0.12);border:1px solid rgba(155,89,182,0.25);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--mist);margin-bottom:10px;">
+        ⚓ <strong style="color:#c39bd3">Overnight Anchor:</strong> ${fd.anchorage.name}<br>${fd.anchorage.notes}
+      </div>`;
+    }
+  }
+
+
+
+  return html;
+}
+
+function toggleDest(idx){
+  document.getElementById('dc'+idx).classList.toggle('expanded');
+}
+function saveNote(key,idx){
+  const ta=document.getElementById('notes'+idx);
+  if(!ta)return;
+  S.notes[key]={text:ta.value,time:Date.now()};
+  const ts=document.getElementById('nts'+idx);
+  if(ts)ts.textContent='Updated just now';
+  saveSettings();
+}
+function showTripDetail(key,type){
+  showPage('map');initMap();
+  setMapMode('trip');
+  document.getElementById('tpDest').value=key;
+  document.getElementById('tpDate').value=S.dashDate.toISOString().slice(0,10);
+  if(type==='Overnight'){
+    const nd=new Date(S.dashDate.getTime()+86400000);
+    document.getElementById('tpReturnDate').value=nd.toISOString().slice(0,10);
+    document.getElementById('tpReturnTime').value='08:00';
+  } else {
+    document.getElementById('tpReturnDate').value=S.dashDate.toISOString().slice(0,10);
+    document.getElementById('tpReturnTime').value=type==='Half Day'?'13:00':'18:00';
+  }
+  setTimeout(()=>runTripPlanner(),200);
+}
+
+// ═══════════════════════════════════════════════════════════
+// FORECAST PAGE
+// ═══════════════════════════════════════════════════════════
+function toggleFcDest(el){
+  const detail=el.nextElementSibling;
+  const chev=el.querySelector('.fchev');
+  if(!detail)return;
+  detail.style.display=detail.style.display==='none'?'block':'none';
+  if(chev)chev.textContent=chev.textContent==='▼'?'▲':'▼';
+}
+
+function renderForecast(){
+  if(!S.forecastData?.daily?.time?.length){
+    document.getElementById('fcContent').innerHTML='<p style="color:var(--mist);padding:20px;font-size:12px">Forecast unavailable. Refresh to load data.</p>';
+    return;
+  }
+  const D=S.forecastData.daily;
+  const dates=D.time.slice(0,5).map(t=>{ const d=new Date(t+'T00:00:00'); d.setHours(8,0,0,0); return d; }); // use 8am local to match dashboard
+
+  // ── TOP STRIP: 4-bar grid per day, using first dashboard destination as reference
+  // Show general conditions using the first selected destination for shelter context
+  // Use open-water spot for top strip (no island shelter bias)
+  const refSpot = S.destinations.find(k=>!SPOTS[k]?.nearIsland)||S.destinations[0]||'fathom43';
+  let html='<div style="padding:0 14px 0">';
+  html+='<div style="display:flex;gap:6px;margin-bottom:14px">';
+  dates.forEach((d,i)=>{
+    const name=i===0?'Today':i===1?'Tomor':d.toLocaleDateString('en-US',{weekday:'short'});
+    const beyond=beyondForecast(d);
+    const windows=beyond?TIME_WINDOWS.map(()=>({score:'unknown'})):scoreAllWindows(refSpot,d);
+    const wh=D.wave_height_max[i],ws=D.wind_speed_max[i];
+    const whFt=wh?(wh*3.281).toFixed(1):'–';
+    html+='<div style="flex:1;background:var(--card);border:1px solid var(--bdr);border-radius:11px;padding:9px 7px;text-align:center">'
+      +'<div style="font-size:9px;color:var(--mist);font-family:monospace;text-transform:uppercase;margin-bottom:5px">'+name+'</div>'
+      +'<div style="display:flex;flex-direction:column;gap:2px;margin:0 auto 5px;width:20px">'
+      +windows.map(w=>'<div style="height:7px;border-radius:2px;background:'+(beyond?'#333':barBg(w.score))+'"></div>').join('')
+      +'</div>'
+      +'<div style="font-size:10px;font-weight:500">'+whFt+' ft</div>'
+      +'<div style="font-size:9px;color:var(--mist)">'+(ws?ws.toFixed(0):'–')+' kts</div>'
+      +'</div>';
+  });
+  html+='</div>';
+
+  // Bar legend
+  html+='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">'
+    +'<span style="font-size:9px;color:var(--mist);font-family:monospace">BARS (top→bottom):</span>'
+    +TIME_WINDOWS.map(w=>'<span style="font-size:9px;color:var(--mist);font-family:monospace">'+w.icon+' '+w.label+'</span>').join(' · ')
+    +'</div>';
+
+  html+='<div class="sec-hdr"><span class="sec-title" style="font-size:16px">BY DESTINATION</span><span class="sec-sub">TAP TO EXPAND</span></div>';
+  html+='<div style="padding:0 14px;display:flex;flex-direction:column;gap:7px;">';
+  S.destinations.forEach((key)=>{
+    const spot=SPOTS[key];if(!spot)return;
+
+    // Summary: 4-bar stack per day (5 days)
+    let summaryHtml='<div style="display:flex;gap:5px;margin-top:5px">';
+    dates.forEach((d,i)=>{
+      const beyond=beyondForecast(d);
+      const name=i===0?'Today':i===1?'Tom':d.toLocaleDateString('en-US',{weekday:'short'});
+      const windows=beyond?TIME_WINDOWS.map(()=>({score:'unknown',color:'#333'})):scoreAllWindows(key,d);
+      summaryHtml+='<div style="flex:1;text-align:center">'
+        +'<div style="font-size:8px;color:var(--mist);font-family:monospace;margin-bottom:3px">'+name+'</div>'
+        +'<div style="display:flex;flex-direction:column;gap:2px;margin:0 auto;width:16px">'
+        +windows.map(w=>'<div style="height:7px;border-radius:2px;background:'+(beyond?'#333':barBg(w.score))+'"></div>').join('')
+        +'</div></div>';
+    });
+    summaryHtml+='</div>';
+
+    // Expanded: per day card with 4-bar detail
+    let detailHtml='<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">';
+    dates.forEach((dayDate,i)=>{
+      const beyond=beyondForecast(dayDate);
+      const dayName=i===0?'Today':i===1?'Tomorrow':dayDate.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+      const moon=lunarPhase(dayDate);
+      const windows=beyond?TIME_WINDOWS.map(w=>({...w,score:'unknown',color:'#333',label:'No data',note:''})):scoreAllWindows(key,dayDate);
+      const worstWin=windows.reduce((a,b)=>{const p=['nogo','rough','bumpy','smooth','unknown'];return p.indexOf(a.score)<p.indexOf(b.score)?a:b;},{score:'unknown',color:'#444'});
+      const wh=D.wave_height_max[i],ws=D.wind_speed_max[i],wp=D.wave_period_max?.[i],wd=D.wind_dir?.[i];
+      const shelter=islandShelterFactor(spot.lat,spot.lng,300,315);
+      const effHt=wh?(wh*3.281*(1-shelter)).toFixed(1):'-';
+      detailHtml+='<div style="background:'+worstWin.color+'18;border:1px solid '+worstWin.color+'33;border-radius:8px;padding:9px 11px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'
+        +'<div style="font-size:12px;font-weight:600">'+dayName+'</div>'
+        +'<div style="font-size:11px">'+moon.emoji+' '+moon.shortName+'</div>'
+        +'</div>'
+        +'<div style="display:flex;gap:10px;align-items:flex-start">'
+        +'<div style="display:flex;flex-direction:column;gap:3px;flex:1">'
+        +TIME_WINDOWS.map((win,wi)=>{
+          const wr=windows[wi];
+          const wlbl=wr.label||'–';
+          const wcol=wr.color||'var(--mist)';
+          const wbg=beyond?'#333':barBg(wr.score);
+          return '<div style="display:flex;align-items:center;gap:6px;padding:1px 0">'
+            +'<div style="width:26px;height:6px;border-radius:2px;background:'+wbg+';flex-shrink:0"></div>'
+            +'<span style="font-size:9px;color:var(--mist);font-family:monospace;width:28px">'+win.icon+' '+win.label+'</span>'
+            +'<span style="font-size:11px;font-weight:500;color:'+wcol+'">'+wlbl+'</span>'
+            +(wr.note&&!beyond?'<span style="font-size:9px;color:var(--mist);margin-left:2px"> · '+wr.note+'</span>':'')
+            +'</div>';
+        }).join('')
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--mist);text-align:right;flex-shrink:0">'
+        +(wh?effHt+'ft @ '+(wp?wp.toFixed(0):'-')+'s<br>':'')
+        +(ws?ws.toFixed(0)+' kts '+(wd?degToCard(wd):'')+'<br>':'')
+        +(moon.fishNote?'<span style="color:'+worstWin.color+'">'+moon.fishNote+'</span>':'')
+        +'</div>'
+        +'</div>'
+        +'</div>';
+    });
+    detailHtml+='</div>';
+
+    html+='<div class="card" style="padding:11px 12px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;-webkit-tap-highlight-color:transparent" onclick="toggleFcDest(this)">'
+      +'<div style="flex:1">'
+      +'<div style="font-size:12px;font-weight:600">'+spot.icon+' '+spot.name+(spot.sub?' · '+spot.sub:'')+'</div>'
+      +summaryHtml
+      +'</div>'
+      +'<div class="fchev" style="color:var(--mist);font-size:11px;margin-left:8px">▼</div>'
+      +'</div>'
+      +'<div style="display:none">'+detailHtml+'</div>'
+      +'</div>';
+  });
+  html+='</div><div style="height:12px"></div>';
+  document.getElementById('fcContent').innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAP
+// ═══════════════════════════════════════════════════════════
+let leafletMap=null;
+let spotMarkers={};
+let shadowLayers=[];
+let routeLayers=[];
+let anchorMarker=null;
+
+function initMap(){
+  if(leafletMap)return;
+  const port=PORTS[S.port];
+  leafletMap=L.map('fishMap',{zoomControl:true,attributionControl:false}).setView([33.8,-119.2],8);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:14}).addTo(leafletMap);
+
+  // Port marker
+  L.circleMarker([port.lat,port.lng],{radius:8,color:'#3498db',fillColor:'#3498db',fillOpacity:1,weight:2}).addTo(leafletMap)
+    .bindPopup(`<b>🏠 ${port.name}</b><br>Home Port`);
+
+  // Spot markers — includes custom spots since they're merged into SPOTS
+  Object.entries(SPOTS).forEach(([key,spot])=>{
+    const isMPA=spot.mpa===true;
+    const isNaval=spot.naval===true;
+    const baseColor=isNaval?'#666':isMPA?'#e67e22':'#555';
+    const m=L.circleMarker([spot.lat,spot.lng],{radius:7,color:baseColor,fillColor:baseColor,fillOpacity:0.85,weight:1.5});
+    m.addTo(leafletMap);
+    // Add MPA ! badge or Naval X badge — use persistent group
+    if(isMPA||isNaval){
+      if(!badgeLayerGroup) badgeLayerGroup=L.layerGroup().addTo(leafletMap);
+      L.marker([spot.lat,spot.lng],{
+        icon:L.divIcon({
+          html:'<div style="font-size:11px;font-weight:900;color:'+(isNaval?'#bbb':'#f39c12')+';text-shadow:0 0 4px rgba(0,0,0,0.9);pointer-events:none;line-height:1">'+(isNaval?'✕':'!')+'</div>',
+          className:'',iconAnchor:[4,-1]
+        }),
+        interactive:false,zIndexOffset:200
+      }).addTo(badgeLayerGroup);
+    }
+    m.on('click',()=>showSpotPopup(key,m));
+    spotMarkers[key]=m;
+  });
+
+  // Populate trip planner dest select
+  const sel=document.getElementById('tpDest');
+  // Sort: built-in spots first, custom spots at bottom
+  const allEntries=[...Object.entries(SPOTS)].sort((a,b)=>{
+    const aC=a[1]._custom?1:0, bC=b[1]._custom?1:0;
+    if(aC!==bC)return aC-bC;
+    return a[1].name.localeCompare(b[1].name);
+  });
+  sel.innerHTML=allEntries.map(([k,s])=>`<option value="${k}">${s.icon} ${s.name}${s.sub?' · '+s.sub:''}</option>`).join('');
+
+  // Default trip planner dates
+  const today=new Date().toISOString().slice(0,10);
+  document.getElementById('tpDate').value=today;
+  document.getElementById('tpReturnDate').value=today;
+
+  updateMapColors();
+}
+
+function showSpotPopup(key,marker){
+  const spot=SPOTS[key];
+  const buoy=spotBuoy(key);
+  let cond=null;
+  if(buoy)cond={waveHt:buoy.waveHt,wavePeriod:buoy.wavePeriod,waveDir:buoy.waveDir||300,windSpd:buoy.windSpd,windDir:buoy.windDir||315};
+  const result=cond?scoreConditions(cond,spot.lat,spot.lng,null,new Date().getHours()):{score:'unknown',label:'No Data',emoji:'❓',note:'Refresh to load'};
+  const sst=buoy?.sst;
+  const mpaWarning=spot.mpa?'<div style="background:#e67e2222;border:1px solid #e67e2255;border-radius:5px;padding:5px 8px;font-size:10px;color:#e67e22;margin-bottom:6px">⚠️ MPA/SMCA — restrictions apply. Check CDFW regs before fishing.</div>':'';
+  const navalWarning=spot.naval?'<div style="background:#66666622;border:1px solid #66666655;border-radius:5px;padding:5px 8px;font-size:10px;color:#aaa;margin-bottom:6px">✕ Naval Security Zone — verify current access restrictions before approaching.</div>':'';
+  marker.bindPopup(`
+    <div class="spot-popup">
+      <h3>${spot.icon} ${spot.name}${spot.sub?' — '+spot.sub:''}</h3>
+      ${mpaWarning}${navalWarning}
+      <div class="sp-meta">${spot.distances[S.port]||'?'} nm · ${spot.depthType}</div>
+      <div style="background:${scoreToColor(result.score)}22;border:1px solid ${scoreToColor(result.score)}55;border-radius:6px;padding:7px;text-align:center;margin-bottom:8px">
+        <span style="font-size:18px">${result.emoji}</span> <strong>${result.label}</strong><br>
+        <span style="font-size:10px;color:#666">${result.note}</span>
+      </div>
+      ${sst?`<div style="font-size:11px;margin-bottom:8px">SST: <strong>${sst.toFixed(0)}°F</strong> — ${sstCtx(sst)}</div>`:''}
+      <button class="add-btn" onclick="addToDashboard('${key}')">+ Add to Dashboard</button>
+    </div>`).openPopup();
+}
+
+function addToDashboard(key){
+  if(S.destinations.includes(key)){alert('Already on your dashboard!');return;}
+  if(S.destinations.length>=5){S.destinations.shift();}
+  S.destinations.push(key);
+  saveSettings();
+  renderDestList();
+  leafletMap.closePopup();
+}
+
+function updateMapColors(){
+  if(!leafletMap)return;
+  clearShadows();
+  if(S.mapMode==='conditions'){
+    updateConditionColors();
+  } else {
+    // Trip planner mode — colors updated by runTripPlanner
+  }
+}
+
+function updateConditionColors(){
+  // Get conditions for slider time
+  let cond=null;
+  if(S.forecastData?.hourly?.time&&S.sliderStep>0){
+    cond=getForecastAtStep(S.sliderStep);
+  }
+
+  Object.entries(SPOTS).forEach(([key,spot])=>{
+    const m=spotMarkers[key];if(!m)return;
+    let useCond=cond;
+    if(!useCond){
+      const b=spotBuoy(key);
+      if(b)useCond={waveHt:b.waveHt,wavePeriod:b.wavePeriod,waveDir:b.waveDir||300,windSpd:b.windSpd,windDir:b.windDir||315};
+    }
+    const result=useCond?scoreConditions(useCond,spot.lat,spot.lng,null,getSliderHour()):
+      {score:'unknown',color:'#555'};
+    const color=scoreToColor(result.score);
+    m.setStyle({color,fillColor:color,fillOpacity:0.85,weight:1.5});
+    // Bigger radius for dashboard spots
+    m.setRadius(S.destinations.includes(key)?10:7);
+  });
+
+  // Draw island shadows based on swell direction
+  const swellDir=cond?.waveDir||S.buoyData['46054']?.waveDir||300;
+  drawIslandShadows(swellDir);
+}
+
+function getSliderHour(){
+  if(!S.forecastData?.hourly?.time||S.sliderStep===0)return new Date().getHours();
+  const t=S.forecastData.hourly.time[S.sliderStep];
+  return t?parseInt(t.slice(11,13)):new Date().getHours();
+}
+
+// Island shadow polygons on map
+function drawIslandShadows(swellDir){
+  clearShadows();
+  if(!shadowVisible)return;
+  Object.entries(ISLANDS).forEach(([key,isl])=>{
+    // Lee direction is opposite of where swell comes FROM
+    const leeBrg=(swellDir+180)%360;
+    // Cast a narrow cone (±15°) from island center in lee direction
+    // Length scales with island size, width stays narrow
+    const shadowLenNm=Math.max(isl.lenNm,isl.widNm)*4;
+    const coneHalfAngle=15; // degrees either side of center
+    const pts=buildShadowCone(isl.lat,isl.lng,leeBrg,shadowLenNm,coneHalfAngle,isl.lenNm/2);
+    const poly=L.polygon(pts,{
+      color:'rgba(37,168,94,0.5)',
+      fillColor:'rgba(37,168,94,0.08)',
+      fillOpacity:1,
+      weight:1,
+      dashArray:'3,5'
+    });
+    poly.bindTooltip(`${isl.name} lee shadow`,{sticky:true,className:'leaflet-tooltip'});
+    poly.addTo(leafletMap);
+    shadowLayers.push(poly);
+  });
+}
+
+function buildShadowCone(lat,lng,dirBrg,lenNm,halfAngleDeg,islandHalfLenNm){
+  // Build a narrow wedge/cone polygon extending downwind from island
+  const DEG=Math.PI/180;
+  const R=3440.065; // Earth radius in nm
+  function offsetPt(lat,lng,brg,distNm){
+    const dLat=distNm*Math.cos(brg*DEG)/60;
+    const dLng=distNm*Math.sin(brg*DEG)/(60*Math.cos(lat*DEG));
+    return[lat+dLat,lng+dLng];
+  }
+  // Base of cone: two points at island edges perpendicular to lee direction
+  const perpL=(dirBrg-90+360)%360;
+  const perpR=(dirBrg+90)%360;
+  const baseL=offsetPt(lat,lng,perpL,islandHalfLenNm*0.7);
+  const baseR=offsetPt(lat,lng,perpR,islandHalfLenNm*0.7);
+  // Tip of cone: far end narrows but doesn't fully close (keep 20% width)
+  const tipCenter=offsetPt(lat,lng,dirBrg,lenNm);
+  const tipHalfWidth=islandHalfLenNm*0.4;
+  const tipL=offsetPt(tipCenter[0],tipCenter[1],perpL,tipHalfWidth);
+  const tipR=offsetPt(tipCenter[0],tipCenter[1],perpR,tipHalfWidth);
+  // Add intermediate points for smoother shape
+  const midDist=lenNm*0.5;
+  const mid=offsetPt(lat,lng,dirBrg,midDist);
+  const midHalfWidth=islandHalfLenNm*0.55;
+  const midL=offsetPt(mid[0],mid[1],perpL,midHalfWidth);
+  const midR=offsetPt(mid[0],mid[1],perpR,midHalfWidth);
+  return[baseL,midL,tipL,tipR,midR,baseR];
+}
+
+function clearShadows(){
+  shadowLayers.forEach(l=>leafletMap.removeLayer(l));
+  shadowLayers=[];
+}
+// MPA BOUNDARY LAYER
+let mpaLayerGroup=null;
+let mpaVisible=false;
+let shadowVisible=true;
+let badgeLayerGroup=null; // persistent MPA/Naval badges
+
+
+function getHardcodedMPAs(){
+  // Key Southern California MPAs — approximate boundary polygons
+  // Source: CDFW MPA public records (cdfw.ca.gov/marine/mpa)
+  return {type:'FeatureCollection',features:[
+    {type:'Feature',properties:{SHORTNAME:'Anacapa Island SMCA',TYPE:'SMCA'},
+     geometry:{type:'Polygon',coordinates:[[[-119.45,33.98],[-119.35,33.98],[-119.35,34.02],[-119.45,34.02],[-119.45,33.98]]]}},
+    {type:'Feature',properties:{SHORTNAME:'Santa Cruz Island SMR',TYPE:'SMR'},
+     geometry:{type:'Polygon',coordinates:[[[-119.85,33.97],[-119.70,33.97],[-119.70,34.05],[-119.85,34.05],[-119.85,33.97]]]}},
+    {type:'Feature',properties:{SHORTNAME:'Scorpion SMR (Santa Cruz)',TYPE:'SMR'},
+     geometry:{type:'Polygon',coordinates:[[[-119.57,33.99],[-119.48,33.99],[-119.48,34.06],[-119.57,34.06],[-119.57,33.99]]]}},
+    {type:'Feature',properties:{SHORTNAME:'Farnsworth Offshore SMCA',TYPE:'SMCA'},
+     geometry:{type:'Polygon',coordinates:[[[-118.53,33.32],[-118.50,33.32],[-118.50,33.36],[-118.53,33.36],[-118.53,33.32]]]}},
+    {type:'Feature',properties:{SHORTNAME:'Catalina Island SMCA',TYPE:'SMCA'},
+     geometry:{type:'Polygon',coordinates:[[[-118.50,33.32],[-118.44,33.32],[-118.44,33.48],[-118.50,33.48],[-118.50,33.32]]]}},
+    {type:'Feature',properties:{SHORTNAME:'Long Point SMCA (Catalina)',TYPE:'SMCA'},
+     geometry:{type:'Polygon',coordinates:[[[-118.38,33.40],[-118.35,33.40],[-118.35,33.43],[-118.38,33.43],[-118.38,33.40]]]}},
+    {type:'Feature',properties:{SHORTNAME:'Arrow Point to Lion Head SMCA',TYPE:'SMCA'},
+     geometry:{type:'Polygon',coordinates:[[[-118.54,33.45],[-118.48,33.45],[-118.48,33.49],[-118.54,33.49],[-118.54,33.45]]]}},
+    {type:'Feature',properties:{SHORTNAME:'San Nicolas Island SMCA',TYPE:'SMCA'},
+     geometry:{type:'Polygon',coordinates:[[[-119.55,33.22],[-119.42,33.22],[-119.42,33.30],[-119.55,33.30],[-119.55,33.22]]]}},
+    {type:'Feature',properties:{SHORTNAME:'Santa Barbara Island SMR',TYPE:'SMR'},
+     geometry:{type:'Polygon',coordinates:[[[-119.05,33.45],[-119.00,33.45],[-119.00,33.50],[-119.05,33.50],[-119.05,33.45]]]}},
+    {type:'Feature',properties:{SHORTNAME:'Painted Cave SMCA (Santa Cruz)',TYPE:'SMCA'},
+     geometry:{type:'Polygon',coordinates:[[[-119.90,34.05],[-119.83,34.05],[-119.83,34.09],[-119.90,34.09],[-119.90,34.05]]]}},
+    {type:'Feature',properties:{SHORTNAME:'Carrington Point SMR (Santa Rosa)',TYPE:'SMR'},
+     geometry:{type:'Polygon',coordinates:[[[-120.14,34.01],[-120.02,34.01],[-120.02,34.06],[-120.14,34.06],[-120.14,34.01]]]}},
+    {type:'Feature',properties:{SHORTNAME:'South Point SMCA (Santa Rosa)',TYPE:'SMCA'},
+     geometry:{type:'Polygon',coordinates:[[[-120.12,33.91],[-120.02,33.91],[-120.02,33.97],[-120.12,33.97],[-120.12,33.91]]]}},
+    {type:'Feature',properties:{SHORTNAME:'Point Conception SMR',TYPE:'SMR'},
+     geometry:{type:'Polygon',coordinates:[[[-120.52,34.42],[-120.44,34.42],[-120.44,34.47],[-120.52,34.47],[-120.52,34.42]]]}},
+    {type:'Feature',properties:{SHORTNAME:'Swamis SMCA',TYPE:'SMCA'},
+     geometry:{type:'Polygon',coordinates:[[[-117.30,33.02],[-117.27,33.02],[-117.27,33.05],[-117.30,33.05],[-117.30,33.02]]]}},
+  ]};
+}
+async function toggleMPALayer(){
+  const btn=document.getElementById('mpaToggleBtn');
+  if(mpaVisible){
+    if(mpaLayerGroup){leafletMap.removeLayer(mpaLayerGroup);mpaLayerGroup=null;}
+    mpaVisible=false;
+    if(btn)btn.textContent='MPA Boundaries: OFF';
+    if(btn)btn.style.color='#e88';
+    return;
+  }
+  if(btn)btn.textContent='Loading...';
+  try{
+    // CDFW MPA GeoJSON — filter to SoCal bounding box
+    // Try multiple sources for MPA boundaries
+    const sources=[
+      'https://opendata.arcgis.com/api/v3/datasets/0e7fa1808b7b4fcea5dbf5fc1a6e7d4e_0/downloads/data?format=geojson&spatialRefId=4326',
+      'https://gis.wildlife.ca.gov/arcgis/rest/services/MPA/CDFW_MPA/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson&resultRecordCount=500',
+    ];
+    let data=null;
+    for(const url of sources){
+      try{
+        const r=await fetch(url,{signal:AbortSignal.timeout(8000)});
+        if(r.ok){data=await r.json();if(data?.features?.length)break;}
+      }catch(e){continue;}
+    }
+    // Fallback to hardcoded SoCal MPA polygons if API fails
+    if(!data||!data.features?.length){data=getHardcodedMPAs();}
+    const url='__skip__';
+    // Filter to SoCal region (roughly 32-35°N, 117-121°W)
+    const filtered={type:'FeatureCollection',features:(data.features||[]).filter(f=>{
+      const coords=f.geometry?.coordinates;
+      if(!coords)return false;
+      // Rough bbox check on first coordinate
+      const flat=coords.flat(4);
+      const lngs=flat.filter((_,i)=>i%2===0);
+      const lats=flat.filter((_,i)=>i%2!==0);
+      const minLat=Math.min(...lats),maxLat=Math.max(...lats);
+      const minLng=Math.min(...lngs),maxLng=Math.max(...lngs);
+      return minLat>31&&maxLat<36&&minLng>-122&&maxLng<-116;
+    })};
+    mpaLayerGroup=L.geoJSON(filtered,{
+      style:{color:'#c0392b',weight:1.5,fillColor:'#c0392b',fillOpacity:0.08,dashArray:'4,3'},
+      onEachFeature:(feature,layer)=>{
+        const name=feature.properties?.SHORTNAME||feature.properties?.NAME||'MPA';
+        const type=feature.properties?.TYPE||'';
+        layer.bindTooltip(name+(type?' ('+type+')':''),{sticky:true});
+      }
+    }).addTo(leafletMap);
+    mpaVisible=true;
+    if(btn)btn.textContent='MPA Boundaries: ON';
+    if(btn){btn.style.color='#e74c3c';btn.style.borderColor='rgba(231,76,60,0.6)';}
+  }catch(e){
+    if(btn)btn.textContent='MPA load failed';
+    console.error('MPA load error:',e);
+  }
+}
+
+function toggleShadowLayer(){
+  const btn=document.getElementById('shadowToggleBtn');
+  shadowVisible=!shadowVisible;
+  if(shadowVisible){
+    updateConditionColors(); // redraws shadows
+    if(btn){btn.textContent='Lee Shadows: ON';btn.style.color='var(--green)';}
+  } else {
+    clearShadows();
+    if(btn){btn.textContent='Lee Shadows: OFF';btn.style.color='var(--mist)';}
+  }
+}
+
+function clearRoutes(){
+  routeLayers.forEach(l=>leafletMap.removeLayer(l));
+  routeLayers=[];
+  if(anchorMarker){leafletMap.removeLayer(anchorMarker);anchorMarker=null;}
+}
+
+// ═══════════════════════════════════════════════════════════
+// TRIP PLANNER MAP MODE
+// ═══════════════════════════════════════════════════════════
+function setMapMode(mode){
+  S.mapMode=mode;
+  document.getElementById('modeCondBtn').classList.toggle('active',mode==='conditions');
+  document.getElementById('modeTripBtn').classList.toggle('active',mode==='trip');
+  document.getElementById('condCtrl').style.display=mode==='conditions'?'':'none';
+  document.getElementById('tripCtrl').style.display=mode==='trip'?'':'none';
+  document.getElementById('legAnch').style.display='none';
+  if(mode==='conditions'){
+    clearRoutes();
+    updateConditionColors();
+  } else {
+    // Reset all markers to grey
+    Object.values(spotMarkers).forEach(m=>m.setStyle({color:'#444',fillColor:'#444',fillOpacity:0.5}));
+    clearShadows();
+  }
+}
+
+function runTripPlanner(){
+  const key=document.getElementById('tpDest').value;
+  const departDate=document.getElementById('tpDate').value;
+  const departTime=document.getElementById('tpDepartTime').value;
+  const returnDate=document.getElementById('tpReturnDate').value;
+  const returnTime=document.getElementById('tpReturnTime').value;
+  if(!key||!departDate||!returnDate)return;
+
+  const result=planTrip(key,departDate,departTime,returnDate,returnTime);
+  if(!result)return;
+  S.tripResult=result;
+  drawTripRoute(result);
+  renderTripSummary(result);
+}
+
+function drawTripRoute(result){
+  clearRoutes();
+  const port=PORTS[S.port];
+  const spot=result.spot;
+  const wp1=spot.waypoints?.[0]||[spot.lat,spot.lng];
+  const wp2=spot.waypoints?.[1]||[spot.lat,spot.lng];
+
+  // Build route points
+  const outPoints=[[port.lat,port.lng],wp1,wp2,[spot.lat,spot.lng]];
+  const retPoints=[[spot.lat,spot.lng],wp2,wp1,[port.lat,port.lng]];
+
+  // Draw outbound legs
+  result.outbound.forEach((leg,i)=>{
+    const from=outPoints[i],to=outPoints[i+1];
+    drawLegLine(from,to,leg.score,'out');
+  });
+
+  // On-location marker
+  const onColor=scoreToColor(result.onLocation.score);
+  const onM=L.circleMarker([spot.lat,spot.lng],{radius:14,color:onColor,fillColor:onColor,fillOpacity:0.3,weight:3});
+  onM.addTo(leafletMap);
+  routeLayers.push(onM);
+
+  // Draw return legs
+  result.return.forEach((leg,i)=>{
+    const from=retPoints[i],to=retPoints[i+1];
+    drawLegLine(from,to,leg.score,'home');
+  });
+
+  // Anchorage
+  if(result.anchorage){
+    const anch=result.anchorage;
+    anchorMarker=L.circleMarker([anch.lat,anch.lng],{radius:10,color:'#9b59b6',fillColor:'#9b59b6',fillOpacity:0.8,weight:2});
+    anchorMarker.addTo(leafletMap);
+    anchorMarker.bindPopup(`<b>⚓ ${anch.name}</b><br>${anch.notes}`);
+    document.getElementById('legAnch').style.display='flex';
+    routeLayers.push(anchorMarker);
+  }
+
+  // Fit map to route
+  const allPts=[...outPoints,...retPoints];
+  if(result.anchorage)allPts.push([result.anchorage.lat,result.anchorage.lng]);
+  leafletMap.fitBounds(allPts,{padding:[30,30]});
+}
+
+function drawLegLine(from,to,score,dir){
+  const color=scoreToColor(score);
+  const isNogo=score==='nogo';
+  // Offset return route slightly so it doesn't overlap outbound
+  const offsetTo=dir==='home'?[to[0]+0.01,to[1]+0.01]:to;
+  const offsetFrom=dir==='home'?[from[0]+0.01,from[1]+0.01]:from;
+
+  if(isNogo){
+    // Animated striped line for no-go
+    const line=L.polyline([offsetFrom,offsetTo],{color:'#c0392b',weight:5,dashArray:'8,6',opacity:0.9});
+    line.addTo(leafletMap);
+    routeLayers.push(line);
+    // White overlay for stripe effect
+    const line2=L.polyline([offsetFrom,offsetTo],{color:'#fff',weight:2,dashArray:'4,10',opacity:0.5,dashOffset:'6'});
+    line2.addTo(leafletMap);
+    routeLayers.push(line2);
+  } else {
+    const line=L.polyline([offsetFrom,offsetTo],{color,weight:5,opacity:0.85,lineCap:'round'});
+    line.addTo(leafletMap);
+    routeLayers.push(line);
+  }
+  // Direction arrow at midpoint
+  const midLat=(from[0]+to[0])/2,midLng=(from[1]+to[1])/2;
+  const brg=bearing(from[0],from[1],to[0],to[1]);
+  const arrow=L.marker([midLat,midLng],{
+    icon:L.divIcon({html:`<div style="color:${color};font-size:14px;transform:rotate(${brg}deg);opacity:0.9">▲</div>`,className:'',iconAnchor:[7,7]}),
+    interactive:false
+  });
+  arrow.addTo(leafletMap);
+  routeLayers.push(arrow);
+}
+
+function renderTripSummary(result){
+  const summaryEl=document.getElementById('tpSummary');
+  summaryEl.style.display='block';
+  const fmt=d=>d?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'?';
+  let txt=`<strong>${result.spot.name}${result.spot.sub?' · '+result.spot.sub:''}</strong><br>`;
+  txt+=`Depart: ${fmt(result.departDT)} · Arrive: ${fmt(result.arrivalTime)} (${result.outDurHr?.toFixed(1)||'?'}h)<br>`;
+  txt+=`On location: ${scoreToEmoji(result.onLocation.score)} ${result.onLocation.label}<br>`;
+  txt+=`Return depart: ${fmt(result.returnStart)} · Home: ${fmt(result.homeTime)} (${result.retDurHr?.toFixed(1)||'?'}h)<br>`;
+  txt+=`Outbound: ${result.outbound.map(l=>scoreToEmoji(l.score)).join('→')}  Return: ${result.return.map(l=>scoreToEmoji(l.score)).join('→')}<br>`;
+  if(result.anchorage)txt+=`⚓ Suggested anchor: ${result.anchorage.name} — ${result.anchorage.notes}`;
+  summaryEl.innerHTML=txt;
+}
+
+// ═══════════════════════════════════════════════════════════
+// TIME SLIDER
+// ═══════════════════════════════════════════════════════════
+function initSlider(){
+  if(!S.forecastData?.hourly?.time)return;
+  const slider=document.getElementById('timeSlider');
+  slider.max=Math.min(S.forecastData.hourly.time.length-1,119); // 5 days * 24h
+  slider.value=0;
+  S.sliderStep=0;
+  updateSliderLabel(0);
+}
+
+function onSliderChange(val){
+  S.sliderStep=parseInt(val);
+  updateSliderLabel(S.sliderStep);
+  if(S.mapMode==='conditions')updateConditionColors();
+}
+
+function updateSliderLabel(step){
+  const lbl=document.getElementById('sliderLbl');
+  if(!S.forecastData?.hourly?.time){lbl.textContent='No forecast loaded';return;}
+  if(step===0){lbl.textContent='Now — current buoy data';return;}
+  const t=S.forecastData.hourly.time[step];
+  if(!t){lbl.textContent='–';return;}
+  const d=new Date(t);
+  const now=new Date();
+  const diff=Math.round((d-now)/3600000);
+  const dayStr=diff<24?d.toLocaleDateString('en-US',{weekday:'short'}):d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+  lbl.textContent=`${dayStr} ${d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+function degToCard(d){
+  if(!d&&d!==0)return'–';
+  return['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(d/22.5)%16];
+}
+function sstCtx(sst){
+  if(sst>=68)return'warm';if(sst>=63)return'good';if(sst>=58)return'cool';return'cold';
+}
+function timeAgo(ts){
+  const d=(Date.now()-ts)/1000;
+  if(d<60)return'just now';if(d<3600)return Math.floor(d/60)+'m ago';
+  if(d<86400)return Math.floor(d/3600)+'h ago';return Math.floor(d/86400)+'d ago';
+}
+function calcViz(){
+  const b=S.buoyData['46054']||S.buoyData['46053'];
+  if(!b)return{label:'Unknown',score:3,color:'var(--mist)',desc:'No buoy data'};
+  let score=5;
+  const wvFt=b.waveHt*3.281,s=wvFt/Math.max(b.wavePeriod||8,1),w=b.windSpd||0;
+  if(s>0.8)score-=2;else if(s>0.5)score-=1;
+  if(w>15)score-=2;else if(w>10)score-=1;
+  if(S.precipData){const tot=(S.precipData.precipitation_sum||[]).slice(-7).reduce((a,b)=>a+(b||0),0);if(tot>0.5)score-=2;else if(tot>0.1)score-=1;}
+  score=Math.max(1,Math.min(5,score));
+  const lbls=['','Poor','Marginal','Fair','Good','Excellent'];
+  const cols=['','#c0392b','#e67e22','#e8a020','#25a85e','#4fd68a'];
+  return{label:lbls[score],score,color:cols[score]};
+}
+function lunarPhase(date){
+  const d=date||S.dashDate||new Date();
+  const phases=['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
+  const names=['New Moon','Waxing Crescent','First Quarter','Waxing Gibbous',
+               'Full Moon','Waning Gibbous','Last Quarter','Waning Crescent'];
+  const short=['New','Wax Cresc','First Qtr','Wax Gibb',
+               'Full','Wan Gibb','Last Qtr','Wan Cresc'];
+  const known=new Date('2024-01-11'); // known new moon
+  const diff=(d-known)/(1000*60*60*24);
+  const cycle=((diff%29.53)+29.53)%29.53;
+  const idx=Math.round((cycle/29.53)*8)%8;
+  // Fishing note: new/full = spring tides = stronger currents = better bite generally
+  const fishNote=(idx===0||idx===4)?'Spring tides':(idx===2||idx===6)?'Neap tides':'';
+  return{emoji:phases[idx],name:names[idx],shortName:short[idx],fishNote,idx};
+}
+
+// ═══════════════════════════════════════════════════════════
+// SETTINGS UI
+// ═══════════════════════════════════════════════════════════
+function renderSettings(){
+  const bs=document.getElementById('boatSelect');
+  if(bs){bs.value=S.boat||'medium';}
+  initTripLog();
+  renderCustomSpotsList();
+  const slots=document.getElementById('destSlots');
+  if(slots){
+    // Include both built-in and custom spots in destination dropdowns
+    const allSpotKeys = [...DASH_SPOTS, ...Object.keys(SPOTS).filter(k=>SPOTS[k]._custom)];
+    slots.innerHTML=Array.from({length:5},(_,i)=>`
+      <div style="margin-bottom:6px">
+        <div style="font-size:9px;color:var(--mist);font-family:monospace;margin-bottom:3px">SLOT ${i+1}</div>
+        <select onchange="updateDest(${i},this.value)">
+          ${allSpotKeys.filter(k=>SPOTS[k]).map(k=>`<option value="${k}" ${S.destinations[i]===k?'selected':''}>
+            ${SPOTS[k].icon} ${SPOTS[k].name}${SPOTS[k].sub?' · '+SPOTS[k].sub:''}
+          </option>`).join('')}
+        </select>
+      </div>`).join('');
+  }
+  const ps=document.getElementById('portSelect');
+  if(ps)ps.value=S.port;
+}
+function toggleSp(key,el){
+  const idx=S.targetSpecies.indexOf(key);
+  if(idx>-1)S.targetSpecies.splice(idx,1);else S.targetSpecies.push(key);
+  el.classList.toggle('on');
+  saveSettings();
+}
+function updateDest(slot,val){
+  S.destinations[slot]=val;
+  saveSettings();
+}
+
+// ═══════════════════════════════════════════════════════════
+// CUSTOM SPOTS UI
+// ═══════════════════════════════════════════════════════════
+
+function handleAddCustomSpot(){
+  const name = document.getElementById('csName').value.trim();
+  const lat  = parseFloat(document.getElementById('csLat').value);
+  const lng  = parseFloat(document.getElementById('csLng').value);
+  const type = document.getElementById('csType').value;
+  if(!name){ alert('Please enter a spot name.'); return; }
+  if(isNaN(lat)||lat<30||lat>36){ alert('Please enter a valid latitude (30–36°N for SoCal).'); return; }
+  if(isNaN(lng)||lng<-122||lng>-115){ alert('Please enter a valid longitude (-122 to -115 for SoCal).'); return; }
+  addCustomSpot(name, lat, lng, type);
+  document.getElementById('csName').value='';
+  document.getElementById('csLat').value='';
+  document.getElementById('csLng').value='';
+  renderCustomSpotsList();
+  renderSettings(); // refresh destination dropdowns
+  // Also update map if open
+  if(leafletMap) initMap();
+}
+
+function renderCustomSpotsList(){
+  const el = document.getElementById('customSpotsList');
+  if(!el) return;
+  const spots = loadCustomSpots();
+  if(!spots.length){
+    el.innerHTML='<div style="font-size:11px;color:var(--mist)">No custom spots yet. Add a location above.</div>';
+    return;
+  }
+  el.innerHTML = spots.map(s=>`
+    <div style="background:rgba(10,22,40,0.5);border:1px solid var(--bdr);border-radius:8px;padding:8px 11px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:12px;font-weight:600">📌 ${s.name}</div>
+        <div style="font-size:10px;color:var(--mist);font-family:monospace">${s.lat.toFixed(4)}, ${s.lng.toFixed(4)} · ${s.depthType}</div>
+      </div>
+      <button onclick="handleDeleteCustomSpot('${s.key}')" style="background:rgba(192,57,43,0.2);border:1px solid rgba(192,57,43,0.3);border-radius:6px;color:#e88;font-size:10px;font-family:monospace;padding:4px 8px;cursor:pointer">Remove</button>
+    </div>`).join('');
+}
+
+function handleDeleteCustomSpot(key){
+  if(!confirm('Remove this custom spot?')) return;
+  deleteCustomSpot(key);
+  renderCustomSpotsList();
+  renderSettings();
+  if(leafletMap){
+    // Remove marker from map if present
+    if(spotMarkers[key]){ leafletMap.removeLayer(spotMarkers[key]); delete spotMarkers[key]; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// TRIP LOG
+// ═══════════════════════════════════════════════════════════
+
+function loadTripLog(){
+  try{ return JSON.parse(localStorage.getItem('socal_fish_triplog')||'[]'); }
+  catch(e){ return []; }
+}
+
+function saveTripLog(log){
+  localStorage.setItem('socal_fish_triplog', JSON.stringify(log));
+}
+
+function addTripLog(){
+  const date  = document.getElementById('logDate').value;
+  const dest  = document.getElementById('logDest').value;
+  const rating= document.getElementById('logRating').value;
+  const notes = document.getElementById('logNotes').value.trim();
+  if(!date||!dest){ alert('Please select a date and destination.'); return; }
+  const log = loadTripLog();
+  const entry = {
+    id: Date.now(),
+    date, dest,
+    destName: SPOTS[dest]?.name+(SPOTS[dest]?.sub?' · '+SPOTS[dest].sub:'') || dest,
+    rating, notes,
+    added: new Date().toISOString()
+  };
+  log.unshift(entry); // newest first
+  saveTripLog(log);
+  document.getElementById('logNotes').value='';
+  renderTripLog();
+}
+
+function deleteTripLog(id){
+  const log = loadTripLog().filter(e=>e.id!==id);
+  saveTripLog(log);
+  renderTripLog();
+}
+
+const RATING_LABELS = {
+  much_calmer:'🟢 Much calmer', calmer:'🟡 Somewhat calmer',
+  as_expected:'⚪ As expected', rougher:'🟠 Somewhat rougher', much_rougher:'🔴 Much rougher'
+};
+
+function renderTripLog(){
+  const list = document.getElementById('tripLogList');
+  if(!list) return;
+  const log = loadTripLog();
+  if(log.length===0){
+    list.innerHTML='<div style="font-size:11px;color:var(--mist);padding:8px 0">No entries yet. Add your first trip note after a day on the water.</div>';
+    return;
+  }
+  list.innerHTML = log.map(e=>`
+    <div style="background:rgba(10,22,40,0.5);border:1px solid var(--bdr);border-radius:8px;padding:9px 11px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+        <div>
+          <span style="font-size:11px;font-weight:600;color:var(--white)">${e.date}</span>
+          <span style="font-size:10px;color:var(--mist);margin-left:6px">${e.destName}</span>
+        </div>
+        <button onclick="deleteTripLog(${e.id})" style="background:none;border:none;color:var(--mist);cursor:pointer;font-size:12px;padding:0 2px" title="Delete">✕</button>
+      </div>
+      <div style="font-size:11px;margin-bottom:${e.notes?'4px':'0'}">${RATING_LABELS[e.rating]||e.rating}</div>
+      ${e.notes?'<div style="font-size:10px;color:var(--mist);line-height:1.5">'+e.notes+'</div>':''}
+    </div>`).join('');
+}
+
+function exportTripLog(){
+  const log = loadTripLog();
+  if(log.length===0){ alert('No trip log entries to export.'); return; }
+  const header = 'Date,Destination,Rating,Notes,Added';
+  const rows = log.map(e=>[
+    e.date,
+    '"'+e.destName.replace(/"/g,'""')+'"',
+    e.rating,
+    '"'+(e.notes||'').replace(/"/g,'""')+'"',
+    e.added
+  ].join(','));
+  const csv = [header,...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='socal-fish-triplog-'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function initTripLog(){
+  // Set today's date as default
+  document.getElementById('logDate').value = new Date().toISOString().slice(0,10);
+  // Populate destination dropdown with all spots
+  const sel = document.getElementById('logDest');
+  if(sel){
+    sel.innerHTML = Object.entries(SPOTS)
+      .sort((a,b)=>a[1].name.localeCompare(b[1].name))
+      .map(([k,s])=>'<option value="'+k+'">'+s.icon+' '+s.name+(s.sub?' · '+s.sub:'')+'</option>')
+      .join('');
+  }
+  renderTripLog();
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+function init(){
+  loadSettings();
+  mergeCustomSpots(); // load user-defined spots into SPOTS object
+  document.getElementById('portLabel').textContent=PORTS[S.port].name;
+  updateDateLabel();
+  renderSettings();
+  document.getElementById('nav-settings').addEventListener('click',renderSettings);
+}
+init();
+</script>
+</body>
+</html>
